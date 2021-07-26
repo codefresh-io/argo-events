@@ -40,13 +40,12 @@ func TestApplyEventLabels(t *testing.T) {
 
 	t.Run("test event label name and value of a single event", func(t *testing.T) {
 		uid := uuid.New()
-		testDepName := "test-dep"
 		labelsMap := make(map[string]string)
 		fakeEventsMap := map[string]*v1alpha1.Event{
-			testDepName: createFakeEvent(fmt.Sprintf("%x", uid)),
+			"test-dep": createFakeEvent(fmt.Sprintf("%x", uid)),
 		}
 
-		labelName := fmt.Sprintf("%s%s", labelNamePrefix, testDepName)
+		labelName := fmt.Sprintf("%s0", labelNamePrefix)
 		err := ApplyEventLabels(labelsMap, fakeEventsMap)
 		assert.Nil(t, err)
 		assert.Equal(t, uid.String(), labelsMap[labelName])
@@ -73,6 +72,7 @@ func TestApplyEventLabels(t *testing.T) {
 
 		err := ApplyEventLabels(labelsMap, fakeEventsMap)
 		assert.Nil(t, err)
+		assert.Equal(t, len(fakeEventsMap), len(labelsMap))
 
 		for key, val := range labelsMap {
 			assert.True(t, strings.HasPrefix(key, labelNamePrefix))

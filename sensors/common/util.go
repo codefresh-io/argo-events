@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/hex"
+	"fmt"
 
 	"github.com/pkg/errors"
 
@@ -9,14 +10,17 @@ import (
 )
 
 func ApplyEventLabels(labels map[string]string, events map[string]*v1alpha1.Event) error {
-	for key, val := range events {
+	count := 0
+	for _, val := range events {
 		decodedID, err := hex.DecodeString(val.Context.ID)
 		if err != nil {
 			return errors.Wrap(err, "failed to decode event ID")
 		}
 
-		labelName := "events.argoproj.io/event-" + key
+		labelName := fmt.Sprintf("events.argoproj.io/event-%d", count)
 		labels[labelName] = string(decodedID)
+
+		count++
 	}
 
 	return nil
