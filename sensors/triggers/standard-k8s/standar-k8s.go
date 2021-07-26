@@ -39,6 +39,7 @@ import (
 	apicommon "github.com/argoproj/argo-events/pkg/apis/common"
 	"github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
 	"github.com/argoproj/argo-events/sensors/artifacts"
+	"github.com/argoproj/argo-events/sensors/common"
 	"github.com/argoproj/argo-events/sensors/policy"
 	"github.com/argoproj/argo-events/sensors/triggers"
 )
@@ -177,6 +178,14 @@ func (k8sTrigger *StandardK8sTrigger) Execute(ctx context.Context, events map[st
 		labels["events.argoproj.io/sensor"] = k8sTrigger.Sensor.Name
 		labels["events.argoproj.io/trigger"] = trigger.Template.Name
 		labels["events.argoproj.io/action-timestamp"] = strconv.Itoa(int(time.Now().UnixNano() / int64(time.Millisecond)))
+
+		if obj.GetKind() == "Workflow" {
+			err := common.ApplyEventLabels(labels, events)
+			if err != nil {
+				k8sTrigger.Logger.Info("failed to apply event labels, skipping...")
+			}
+		}
+
 		obj.SetLabels(labels)
 		return k8sTrigger.namespableDynamicClient.Namespace(namespace).Create(ctx, obj, metav1.CreateOptions{})
 
