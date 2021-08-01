@@ -214,7 +214,7 @@ func GetConfigMapValue(ctx context.Context, client kubernetes.Interface, namespa
 	if !ok {
 		return "", errors.Errorf("config map '%s' does not have the key '%s'", selector.Name, selector.Key)
 	}
-	return string(val), nil
+	return val, nil
 }
 
 // GetEnvFromConfigMap retrieves the value of envFrom.configMapRef

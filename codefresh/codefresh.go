@@ -53,16 +53,15 @@ func getCodefreshAuthToken(ctx context.Context, kubeClient kubernetes.Interface,
 }
 
 func getCodefreshBaseURL(ctx context.Context, kubeClient kubernetes.Interface, namespace string) (string, error) {
-	//const configMapName = "codefresh-config"
-	//const configMapKey = "base-url"
-	//configMapSelector := &corev1.ConfigMapKeySelector{
-	//	Key: configMapKey,
-	//		Name: configMapName,
-	//	LocalObjectReference: corev1.LocalObjectReference{
-	//	},
-	//}
-	//return common.GetConfigMapValue(ctx, kubeClient, namespace, cfConfigMapSelector)
-	return "http://local.codefresh.io", nil
+	const configMapName = "codefresh-cm"
+	const configMapKey = "base-url"
+	cfConfigMapSelector := &corev1.ConfigMapKeySelector{
+		Key: configMapKey,
+		LocalObjectReference: corev1.LocalObjectReference{
+			Name: configMapName,
+		},
+	}
+	return common.GetConfigMapValue(ctx, kubeClient, namespace, cfConfigMapSelector)
 }
 
 func ReportEventToCodefresh(eventJson []byte, config *Config) error {
