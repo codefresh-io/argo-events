@@ -66,7 +66,7 @@ func getCodefreshBaseURL(ctx context.Context, kubeClient kubernetes.Interface, n
 
 func ReportEventToCodefresh(eventJson []byte, config *Config) error {
 	const contentType = "application/json"
-	url := config.BaseURL + "/argo/api/events"
+	url := config.BaseURL + "/argo/api/events/event-payload"
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(eventJson))
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Authorization", config.AuthToken)
