@@ -15,8 +15,15 @@ import (
 	"github.com/argoproj/argo-events/common"
 )
 
+const (
+	cfConfigMapName       = "codefresh-cm"
+	cfBaseURLConfigMapKey = "base-url"
+	cfSecretName          = "codefresh-token"
+	cfAuthSecretKey       = "token"
+)
+
 type Config struct {
-	BaseURL string
+	BaseURL   string
 	AuthToken string
 }
 
@@ -41,31 +48,27 @@ func GetCodefreshConfig(ctx context.Context, namespace string) (*Config, error) 
 }
 
 func getCodefreshAuthToken(ctx context.Context, kubeClient kubernetes.Interface, namespace string) (string, error) {
-	const secretName = "codefresh-token"
-	const secretKey = "token"
 	cfSecretSelector := &corev1.SecretKeySelector{
-		Key: secretKey,
+		Key: cfAuthSecretKey,
 		LocalObjectReference: corev1.LocalObjectReference{
-			Name: secretName,
+			Name: cfSecretName,
 		},
 	}
 	return common.GetSecretValue(ctx, kubeClient, namespace, cfSecretSelector)
 }
 
 func getCodefreshBaseURL(ctx context.Context, kubeClient kubernetes.Interface, namespace string) (string, error) {
-	const configMapName = "codefresh-cm"
-	const configMapKey = "base-url"
 	cfConfigMapSelector := &corev1.ConfigMapKeySelector{
-		Key: configMapKey,
+		Key: cfBaseURLConfigMapKey,
 		LocalObjectReference: corev1.LocalObjectReference{
-			Name: configMapName,
+			Name: cfConfigMapName,
 		},
 	}
 	return common.GetConfigMapValue(ctx, kubeClient, namespace, cfConfigMapSelector)
 }
 
 func ReportEventToCodefresh(eventJson []byte, config *Config) error {
-	const contentType = "application/json"
+	contentType := "application/json"
 	url := config.BaseURL + "/argo/api/events/event-payload"
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(eventJson))
 	req.Header.Set("Content-Type", contentType)
