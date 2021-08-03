@@ -83,7 +83,8 @@ func ReportEventToCodefresh(eventJson []byte, config *Config) error {
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode != 200 {
+	isStatusOK := res.StatusCode >= 200 && res.StatusCode < 300
+	if !isStatusOK {
 		b, _ := ioutil.ReadAll(res.Body)
 		return errors.Errorf("failed reporting to Codefresh, got response: status code %d and body %s, event: %s",
 			res.StatusCode, string(b), string(eventJson))
