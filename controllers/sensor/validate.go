@@ -18,6 +18,7 @@ package sensor
 
 import (
 	"fmt"
+	apicommon "github.com/argoproj/argo-events/pkg/apis/common"
 	"net/http"
 	"strings"
 	"time"
@@ -444,16 +445,34 @@ func validateDependencies(eventDependencies []v1alpha1.EventDependency) error {
 		return errors.New("no event dependencies found")
 	}
 	comboKeys := make(map[string]bool)
+	existingEventSourceFilters := make(map[apicommon.EventSourceType]bool)
 	for _, dep := range eventDependencies {
 		if dep.Name == "" {
 			return errors.New("event dependency must define a name")
 		}
-		if dep.EventSourceName == "" {
-			return errors.New("event dependency must define the EventSourceName")
-		}
+		if len(dep.EventSourceFilterCondition) != 0 {
+			if dep.EventSourceFilter == "" {
+				return errors.New("event dependency must define the EventSourceFilter")
+			}
 
+			if dep.EventSourceFilterCondition != "&&" && dep.EventSourceFilterCondition != "||" {
+				return errors.New("invalid EventSourceFilterCondition: must be either && or ||")
+			}
+		}
+		if len(dep.EventSourceFilter) != 0 {
+			if _, exists := existingEventSourceFilters[dep.EventSourceFilter]; exists {
+				return errors.Errorf("EventSourceFilter %s is referenced more than once in this Sensor object", dep.EventSourceFilter)
+			}
+			if len(dep.EventSourceName) != 0 || len(dep.EventName) != 0 {
+				return errors.New("event dependency cannot define EventSourceFilter together with EventSourceName or EventName")
+			}
+			continue
+		}
+		if dep.EventSourceName == "" {
+			return errors.New("event dependency must define the EventSourceName or EventSourceFilter")
+		}
 		if dep.EventName == "" {
-			return errors.New("event dependency must define the EventName")
+			return errors.New("event dependency must define the EventName or EventSourceFilter")
 		}
 		// EventSourceName + EventName can not be referenced more than once in one Sensor object.
 		comboKey := fmt.Sprintf("%s-$$$-%s", dep.EventSourceName, dep.EventName)

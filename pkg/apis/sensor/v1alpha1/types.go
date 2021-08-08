@@ -192,6 +192,11 @@ type EventDependency struct {
 	EventName string `json:"eventName" protobuf:"bytes,3,name=eventName"`
 	// Filters and rules governing toleration of success and constraints on the context and data of an event
 	Filters *EventDependencyFilter `json:"filters,omitempty" protobuf:"bytes,4,opt,name=filters"`
+	// EventSourceFilter is a filter of a group of dependencies that Sensor depends on
+	EventSourceFilter apicommon.EventSourceType `json:"eventSourceFilter,omitempty" protobuf:"bytes,5,opt,name=eventSourceFilter"`
+	// EventSourceFilterCondition is the condition between the group of dependencies that is filtered by EventSourceFilter to execute the trigger
+	// Can be either || (default) or &&
+	EventSourceFilterCondition string `json:"eventSourceFilterCondition,omitempty" protobuf:"bytes,6,opt,name=eventSourceFilterCondition"`
 }
 
 // DependencyGroup is the group of dependencies
