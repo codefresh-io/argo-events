@@ -164,15 +164,15 @@ func (r *reconciler) mapFilterDependenciesToRegularDependencies(ctx context.Cont
 		return nil, err
 	}
 
-	eventsMap := make(map[apicommon.EventSourceType][]eventSourceEvent)
+	esEventsByType := make(map[apicommon.EventSourceType][]eventSourceEvent)
 	for _, es := range esList.Items {
-		applyEventSourceEventsGroupedByTypes(&es, eventsMap)
+		applyEventSourceEventsGroupedByTypes(&es, esEventsByType)
 	}
 
 	resultDeps := make([]sensorv1alpha1.EventDependency, 0, len(esList.Items))
 	for _, fd := range filterDeps {
 		esType := fd.EventSourceFilter
-		for _, event := range eventsMap[esType] {
+		for _, event := range esEventsByType[esType] {
 			resultDeps = append(resultDeps, sensorv1alpha1.EventDependency{
 				Name:            fmt.Sprintf("%s-%d", fd.Name, len(resultDeps)),
 				EventName:       event.eventName,
