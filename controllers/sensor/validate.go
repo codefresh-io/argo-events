@@ -18,15 +18,16 @@ package sensor
 
 import (
 	"fmt"
-	apicommon "github.com/argoproj/argo-events/pkg/apis/common"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/Knetic/govaluate"
-	"github.com/argoproj/argo-events/common"
-	"github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
 	"github.com/pkg/errors"
+
+	"github.com/argoproj/argo-events/common"
+	apicommon "github.com/argoproj/argo-events/pkg/apis/common"
+	"github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
 )
 
 // ValidateSensor accepts a sensor and performs validation against it
