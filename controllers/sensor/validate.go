@@ -460,12 +460,13 @@ func validateDependencies(eventDependencies []v1alpha1.EventDependency) error {
 			}
 		}
 		if len(dep.EventSourceFilter) != 0 {
-			if _, exists := existingEventSourceFilters[dep.EventSourceFilter]; exists {
+			if _, existing := existingEventSourceFilters[dep.EventSourceFilter]; existing {
 				return errors.Errorf("EventSourceFilter %s is referenced more than once in this Sensor object", dep.EventSourceFilter)
 			}
 			if len(dep.EventSourceName) != 0 || len(dep.EventName) != 0 {
 				return errors.New("event dependency cannot define EventSourceFilter together with EventSourceName or EventName")
 			}
+			existingEventSourceFilters[dep.EventSourceFilter] = true
 			continue
 		}
 		if dep.EventSourceName == "" {
