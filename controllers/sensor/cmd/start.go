@@ -95,7 +95,8 @@ func Start(namespaced bool, managedNamespace string) {
 						return false
 					}
 					return !reflect.DeepEqual(e.ObjectNew.GetLabels(), e.ObjectOld.GetLabels())
-				}},
+				},
+			},
 		)); err != nil {
 		logger.Fatalw("unable to watch Sensors", zap.Error(err))
 	}
@@ -107,14 +108,30 @@ func Start(namespaced bool, managedNamespace string) {
 
 	// Watch EventSources and enqueue effected Sensor keys (Sensors with filter dependencies)
 	esEventsHandler := createEventSourceEventsHandler(mgr.GetClient(), logger)
-	// TODO decide if sensor update on ES deletion is required
-	//if err := c.Watch(&source.Kind{Type: &eventsourcev1alpha1.EventSource{}}, handler.EnqueueRequestsFromMapFunc(esEventsHandler), predicate.GenerationChangedPredicate{}); err != nil {
 	if err := c.Watch(&source.Kind{Type: &eventsourcev1alpha1.EventSource{}}, handler.EnqueueRequestsFromMapFunc(esEventsHandler),
 		predicate.And(
 			predicate.GenerationChangedPredicate{},
 			predicate.Funcs{
+				// TODO decide if sensor update on ES deletion is required
 				DeleteFunc: func(e event.DeleteEvent) bool {
 					return false
+				},
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					if e.ObjectOld == nil {
+						return false
+					}
+					if e.ObjectNew == nil {
+						return false
+					}
+					esOld, ok := e.ObjectOld.(*eventsourcev1alpha1.EventSource)
+					if !ok {
+						return false
+					}
+					esNew, ok := e.ObjectNew.(*eventsourcev1alpha1.EventSource)
+					if !ok {
+						return false
+					}
+					return !reflect.DeepEqual(esOld.Spec, esNew.Spec)
 				},
 			},
 		)); err != nil {
