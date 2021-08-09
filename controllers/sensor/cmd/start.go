@@ -70,7 +70,7 @@ func Start(namespaced bool, managedNamespace string) {
 	}
 
 	if err := eventbusv1alpha1.AddToScheme(mgr.GetScheme()); err != nil {
-		logger.Fatalw("uunable to add EventBus scheme", zap.Error(err))
+		logger.Fatalw("unable to add EventBus scheme", zap.Error(err))
 	}
 
 	// A controller with DefaultControllerRateLimiter

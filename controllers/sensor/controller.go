@@ -19,6 +19,9 @@ package sensor
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
+
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -104,10 +107,17 @@ func (r *reconciler) reconcile(ctx context.Context, sensor *sensorv1alpha1.Senso
 		log.Errorw("validation error", "error", err)
 		return err
 	}
+	sensorCopy := sensor.DeepCopy()
 	err := r.recreateDependencies(ctx, sensor)
 	if err != nil {
 		log.Errorw("failed to map dependencies", "error", err)
 		return err
+	}
+	if r.needsValidation(sensorCopy, sensor) {
+		if err := ValidateSensor(sensor); err != nil {
+			log.Errorw("validation error", "error", err)
+			return err
+		}
 	}
 	args := &AdaptorArgs{
 		Image:  r.sensorImage,
@@ -125,10 +135,14 @@ func (r *reconciler) needsUpdate(old, new *sensorv1alpha1.Sensor) bool {
 	if old == nil {
 		return true
 	}
-	if !equality.Semantic.DeepEqual(old.Finalizers, new.Finalizers) {
+	return !equality.Semantic.DeepEqual(old.Finalizers, new.Finalizers)
+}
+
+func (r *reconciler) needsValidation(old, new *sensorv1alpha1.Sensor) bool {
+	if old == nil {
 		return true
 	}
-	return false
+	return !equality.Semantic.DeepEqual(old.Spec.Dependencies, new.Spec.Dependencies)
 }
 
 func (r *reconciler) recreateDependencies(ctx context.Context, sensor *sensorv1alpha1.Sensor) error {
@@ -166,13 +180,16 @@ func (r *reconciler) mapFilterDependenciesToRegularDependencies(ctx context.Cont
 
 	esEventsByType := make(map[apicommon.EventSourceType][]eventSourceEvent)
 	for _, es := range esList.Items {
-		applyEventSourceEventsGroupedByTypes(&es, esEventsByType)
+		r.applyEventSourceEventsGroupedByTypes(&es, esEventsByType)
 	}
 
+	r.sortDependenciesByName(filterDeps)
 	resultDeps := make([]sensorv1alpha1.EventDependency, 0, len(esList.Items))
 	for _, fd := range filterDeps {
 		esType := fd.EventSourceFilter
-		for _, event := range esEventsByType[esType] {
+		events := esEventsByType[esType]
+		r.sortEventSourceEvents(events)
+		for _, event := range events {
 			resultDeps = append(resultDeps, sensorv1alpha1.EventDependency{
 				Name:            fmt.Sprintf("%s-%d", fd.Name, len(resultDeps)),
 				EventName:       event.eventName,
@@ -184,7 +201,7 @@ func (r *reconciler) mapFilterDependenciesToRegularDependencies(ctx context.Cont
 	return resultDeps, nil
 }
 
-func applyEventSourceEventsGroupedByTypes(eventSource *eventsourcev1alpha1.EventSource, eventNamesMap map[apicommon.EventSourceType][]eventSourceEvent) {
+func (r *reconciler) applyEventSourceEventsGroupedByTypes(eventSource *eventsourcev1alpha1.EventSource, eventNamesMap map[apicommon.EventSourceType][]eventSourceEvent) {
 	esName := eventSource.Name
 	if len(eventSource.Spec.AMQP) != 0 {
 		for eventName := range eventSource.Spec.AMQP {
@@ -378,4 +395,18 @@ func applyEventSourceEventsGroupedByTypes(eventSource *eventsourcev1alpha1.Event
 			})
 		}
 	}
+}
+
+func (r *reconciler) sortDependenciesByName(deps []sensorv1alpha1.EventDependency) {
+	sort.Slice(deps, func(i, j int) bool {
+		return strings.Compare(deps[i].Name, deps[j].Name) > 0
+	})
+}
+
+func (r *reconciler) sortEventSourceEvents(events []eventSourceEvent) {
+	sort.Slice(events, func(i, j int) bool {
+		comboKey1 := fmt.Sprintf("%s-%s", events[i].eventSourceName, events[i].eventName)
+		comboKey2 := fmt.Sprintf("%s-%s", events[j].eventSourceName, events[j].eventName)
+		return strings.Compare(comboKey1, comboKey2) > 0
+	})
 }
