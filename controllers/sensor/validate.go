@@ -469,10 +469,10 @@ func validateDependencies(eventDependencies []v1alpha1.EventDependency) error {
 			continue
 		}
 		if dep.EventSourceName == "" {
-			return errors.New("event dependency must define the EventSourceName or EventSourceFilter")
+			return errors.New("event dependency must define the EventSourceName or the EventSourceFilter")
 		}
 		if dep.EventName == "" {
-			return errors.New("event dependency must define the EventName or EventSourceFilter")
+			return errors.New("event dependency must define the EventName or the EventSourceFilter")
 		}
 		// EventSourceName + EventName can not be referenced more than once in one Sensor object.
 		comboKey := fmt.Sprintf("%s-$$$-%s", dep.EventSourceName, dep.EventName)
