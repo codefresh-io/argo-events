@@ -110,13 +110,12 @@ func (r *reconciler) reconcile(ctx context.Context, sensor *sensorv1alpha1.Senso
 		log.Errorw("validation error", "error", err)
 		return err
 	}
-	sensorCopy := sensor.DeepCopy()
-	err := r.recreateDependencies(ctx, sensor)
+	changed, err := r.recreateDependencies(ctx, sensor)
 	if err != nil {
 		log.Errorw("failed to map dependencies", "error", err)
 		return err
 	}
-	if r.needsValidation(sensorCopy, sensor) {
+	if changed {
 		if err := ValidateSensor(sensor); err != nil {
 			log.Errorw("validation error", "error", err)
 			return err
@@ -141,35 +140,30 @@ func (r *reconciler) needsUpdate(old, new *sensorv1alpha1.Sensor) bool {
 	return !equality.Semantic.DeepEqual(old.Finalizers, new.Finalizers)
 }
 
-func (r *reconciler) needsValidation(old, new *sensorv1alpha1.Sensor) bool {
-	if old == nil {
-		return true
-	}
-	return !equality.Semantic.DeepEqual(old.Spec.Dependencies, new.Spec.Dependencies)
-}
-
-func (r *reconciler) recreateDependencies(ctx context.Context, sensor *sensorv1alpha1.Sensor) error {
+func (r *reconciler) recreateDependencies(ctx context.Context, sensor *sensorv1alpha1.Sensor) (bool, error) {
 	currDeps := sensor.Spec.Dependencies
-	newDeps := make([]sensorv1alpha1.EventDependency, 0, len(currDeps))
+	regularDeps := make([]sensorv1alpha1.EventDependency, 0, len(currDeps))
 	var filterDeps []sensorv1alpha1.EventDependency
 	for _, dep := range currDeps {
 		eventSourceType := dep.EventSourceFilter
 		if len(eventSourceType) != 0 {
 			filterDeps = append(filterDeps, dep)
 		} else {
-			newDeps = append(newDeps, dep)
+			regularDeps = append(regularDeps, dep)
 		}
+	}
+	if len(filterDeps) == 0 {
+		return false, nil
 	}
 
 	mappedDeps, err := r.mapFilterDependenciesToRegularDependencies(ctx, sensor.Namespace, filterDeps)
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	newDeps = append(newDeps, mappedDeps...)
-	sensor.Spec.Dependencies = newDeps
+	sensor.Spec.Dependencies = append(regularDeps, mappedDeps...)
 
-	return nil
+	return true, nil
 }
 
 func (r *reconciler) mapFilterDependenciesToRegularDependencies(ctx context.Context, namespace string, filterDeps []sensorv1alpha1.EventDependency) ([]sensorv1alpha1.EventDependency, error) {
