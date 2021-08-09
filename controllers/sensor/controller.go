@@ -19,9 +19,6 @@ package sensor
 import (
 	"context"
 	"fmt"
-	"sort"
-	"strings"
-
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,6 +27,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sort"
+	"strings"
 
 	"github.com/argoproj/argo-events/common"
 	apicommon "github.com/argoproj/argo-events/pkg/apis/common"
@@ -47,6 +46,10 @@ const (
 type eventSourceEvent struct {
 	eventName       string
 	eventSourceName string
+}
+
+func newEventSourceEvent(eventName, eventSourceName string) *eventSourceEvent {
+	return &eventSourceEvent{eventName: eventName, eventSourceName: eventSourceName}
 }
 
 type reconciler struct {
@@ -178,7 +181,7 @@ func (r *reconciler) mapFilterDependenciesToRegularDependencies(ctx context.Cont
 		return nil, err
 	}
 
-	esEventsByType := make(map[apicommon.EventSourceType][]eventSourceEvent)
+	esEventsByType := make(map[apicommon.EventSourceType][]*eventSourceEvent)
 	for _, es := range esList.Items {
 		r.applyEventSourceEventsGroupedByTypes(&es, esEventsByType)
 	}
@@ -189,11 +192,11 @@ func (r *reconciler) mapFilterDependenciesToRegularDependencies(ctx context.Cont
 		esType := fd.EventSourceFilter
 		events := esEventsByType[esType]
 		r.sortEventSourceEvents(events)
-		for _, event := range events {
+		for i, e := range events {
 			resultDeps = append(resultDeps, sensorv1alpha1.EventDependency{
-				Name:            fmt.Sprintf("%s-%d", fd.Name, len(resultDeps)),
-				EventName:       event.eventName,
-				EventSourceName: event.eventSourceName,
+				Name:            fmt.Sprintf("%s-%d", fd.Name, i),
+				EventName:       e.eventName,
+				EventSourceName: e.eventSourceName,
 			})
 		}
 	}
@@ -201,212 +204,140 @@ func (r *reconciler) mapFilterDependenciesToRegularDependencies(ctx context.Cont
 	return resultDeps, nil
 }
 
-func (r *reconciler) applyEventSourceEventsGroupedByTypes(eventSource *eventsourcev1alpha1.EventSource, eventNamesMap map[apicommon.EventSourceType][]eventSourceEvent) {
+func (r *reconciler) applyEventSourceEventsGroupedByTypes(eventSource *eventsourcev1alpha1.EventSource, eventNamesMap map[apicommon.EventSourceType][]*eventSourceEvent) {
 	esName := eventSource.Name
 	if len(eventSource.Spec.AMQP) != 0 {
 		for eventName := range eventSource.Spec.AMQP {
-			eventNamesMap[apicommon.AMQPEvent] = append(eventNamesMap[apicommon.AMQPEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.AMQPEvent] = append(eventNamesMap[apicommon.AMQPEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.AzureEventsHub) != 0 {
 		for eventName := range eventSource.Spec.AzureEventsHub {
-			eventNamesMap[apicommon.AzureEventsHub] = append(eventNamesMap[apicommon.AzureEventsHub], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.AzureEventsHub] = append(eventNamesMap[apicommon.AzureEventsHub], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.Calendar) != 0 {
 		for eventName := range eventSource.Spec.Calendar {
-			eventNamesMap[apicommon.CalendarEvent] = append(eventNamesMap[apicommon.CalendarEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.CalendarEvent] = append(eventNamesMap[apicommon.CalendarEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.Emitter) != 0 {
 		for eventName := range eventSource.Spec.Emitter {
-			eventNamesMap[apicommon.EmitterEvent] = append(eventNamesMap[apicommon.EmitterEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.EmitterEvent] = append(eventNamesMap[apicommon.EmitterEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.File) != 0 {
 		for eventName := range eventSource.Spec.File {
-			eventNamesMap[apicommon.FileEvent] = append(eventNamesMap[apicommon.FileEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.FileEvent] = append(eventNamesMap[apicommon.FileEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.Github) != 0 {
 		for eventName := range eventSource.Spec.Github {
-			eventNamesMap[apicommon.GithubEvent] = append(eventNamesMap[apicommon.GithubEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.GithubEvent] = append(eventNamesMap[apicommon.GithubEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.Gitlab) != 0 {
 		for eventName := range eventSource.Spec.Gitlab {
-			eventNamesMap[apicommon.GitlabEvent] = append(eventNamesMap[apicommon.GitlabEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.GitlabEvent] = append(eventNamesMap[apicommon.GitlabEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.HDFS) != 0 {
 		for eventName := range eventSource.Spec.HDFS {
-			eventNamesMap[apicommon.HDFSEvent] = append(eventNamesMap[apicommon.HDFSEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.HDFSEvent] = append(eventNamesMap[apicommon.HDFSEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.Kafka) != 0 {
 		for eventName := range eventSource.Spec.Kafka {
-			eventNamesMap[apicommon.KafkaEvent] = append(eventNamesMap[apicommon.KafkaEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.KafkaEvent] = append(eventNamesMap[apicommon.KafkaEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.MQTT) != 0 {
 		for eventName := range eventSource.Spec.MQTT {
-			eventNamesMap[apicommon.MQTTEvent] = append(eventNamesMap[apicommon.MQTTEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.MQTTEvent] = append(eventNamesMap[apicommon.MQTTEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.Minio) != 0 {
 		for eventName := range eventSource.Spec.Minio {
-			eventNamesMap[apicommon.MinioEvent] = append(eventNamesMap[apicommon.MinioEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.MinioEvent] = append(eventNamesMap[apicommon.MinioEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.NATS) != 0 {
 		for eventName := range eventSource.Spec.NATS {
-			eventNamesMap[apicommon.NATSEvent] = append(eventNamesMap[apicommon.NATSEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.NATSEvent] = append(eventNamesMap[apicommon.NATSEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.NSQ) != 0 {
 		for eventName := range eventSource.Spec.NSQ {
-			eventNamesMap[apicommon.NSQEvent] = append(eventNamesMap[apicommon.NSQEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.NSQEvent] = append(eventNamesMap[apicommon.NSQEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.PubSub) != 0 {
 		for eventName := range eventSource.Spec.PubSub {
-			eventNamesMap[apicommon.PubSubEvent] = append(eventNamesMap[apicommon.PubSubEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.PubSubEvent] = append(eventNamesMap[apicommon.PubSubEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.Redis) != 0 {
 		for eventName := range eventSource.Spec.Redis {
-			eventNamesMap[apicommon.RedisEvent] = append(eventNamesMap[apicommon.RedisEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.RedisEvent] = append(eventNamesMap[apicommon.RedisEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.SNS) != 0 {
 		for eventName := range eventSource.Spec.SNS {
-			eventNamesMap[apicommon.SNSEvent] = append(eventNamesMap[apicommon.SNSEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.SNSEvent] = append(eventNamesMap[apicommon.SNSEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.SQS) != 0 {
 		for eventName := range eventSource.Spec.SQS {
-			eventNamesMap[apicommon.SQSEvent] = append(eventNamesMap[apicommon.SQSEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.SQSEvent] = append(eventNamesMap[apicommon.SQSEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.Slack) != 0 {
 		for eventName := range eventSource.Spec.Slack {
-			eventNamesMap[apicommon.SlackEvent] = append(eventNamesMap[apicommon.SlackEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.SlackEvent] = append(eventNamesMap[apicommon.SlackEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.StorageGrid) != 0 {
 		for eventName := range eventSource.Spec.StorageGrid {
-			eventNamesMap[apicommon.StorageGridEvent] = append(eventNamesMap[apicommon.StorageGridEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.StorageGridEvent] = append(eventNamesMap[apicommon.StorageGridEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.Stripe) != 0 {
 		for eventName := range eventSource.Spec.Stripe {
-			eventNamesMap[apicommon.StripeEvent] = append(eventNamesMap[apicommon.StripeEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.StripeEvent] = append(eventNamesMap[apicommon.StripeEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.Webhook) != 0 {
 		for eventName := range eventSource.Spec.Webhook {
-			eventNamesMap[apicommon.WebhookEvent] = append(eventNamesMap[apicommon.WebhookEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.WebhookEvent] = append(eventNamesMap[apicommon.WebhookEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.Resource) != 0 {
 		for eventName := range eventSource.Spec.Resource {
-			eventNamesMap[apicommon.ResourceEvent] = append(eventNamesMap[apicommon.ResourceEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.ResourceEvent] = append(eventNamesMap[apicommon.ResourceEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.Pulsar) != 0 {
 		for eventName := range eventSource.Spec.Pulsar {
-			eventNamesMap[apicommon.PulsarEvent] = append(eventNamesMap[apicommon.PulsarEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.PulsarEvent] = append(eventNamesMap[apicommon.PulsarEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 	if len(eventSource.Spec.Generic) != 0 {
 		for eventName := range eventSource.Spec.Generic {
-			eventNamesMap[apicommon.GenericEvent] = append(eventNamesMap[apicommon.GenericEvent], eventSourceEvent{
-				eventName:       eventName,
-				eventSourceName: esName,
-			})
+			eventNamesMap[apicommon.GenericEvent] = append(eventNamesMap[apicommon.GenericEvent], newEventSourceEvent(eventName, esName))
 		}
 	}
 }
 
 func (r *reconciler) sortDependenciesByName(deps []sensorv1alpha1.EventDependency) {
 	sort.Slice(deps, func(i, j int) bool {
-		return strings.Compare(deps[i].Name, deps[j].Name) > 0
+		return strings.Compare(deps[i].Name, deps[j].Name) < 0
 	})
 }
 
-func (r *reconciler) sortEventSourceEvents(events []eventSourceEvent) {
+func (r *reconciler) sortEventSourceEvents(events []*eventSourceEvent) {
 	sort.Slice(events, func(i, j int) bool {
 		comboKey1 := fmt.Sprintf("%s-%s", events[i].eventSourceName, events[i].eventName)
 		comboKey2 := fmt.Sprintf("%s-%s", events[j].eventSourceName, events[j].eventName)
-		return strings.Compare(comboKey1, comboKey2) > 0
+		return strings.Compare(comboKey1, comboKey2) < 0
 	})
 }
