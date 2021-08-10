@@ -145,8 +145,7 @@ func (r *reconciler) recreateDependencies(ctx context.Context, sensor *sensorv1a
 	regularDeps := make([]sensorv1alpha1.EventDependency, 0, len(currDeps))
 	var filterDeps []sensorv1alpha1.EventDependency
 	for _, dep := range currDeps {
-		eventSourceType := dep.EventSourceFilter
-		if len(eventSourceType) != 0 {
+		if len(dep.EventSourceFilter) != 0 {
 			filterDeps = append(filterDeps, dep)
 		} else {
 			regularDeps = append(regularDeps, dep)
