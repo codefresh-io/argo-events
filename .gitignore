@@ -15,3 +15,5 @@ site/
 # telepresence
 .env
 telepresence.log
+# codefresh
+update_argo_events_manifests.sh
