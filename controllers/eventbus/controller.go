@@ -2,6 +2,7 @@ package eventbus
 
 import (
 	"context"
+	"github.com/argoproj/argo-events/codefresh"
 
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -30,11 +31,12 @@ type reconciler struct {
 	natsStreamingImage string
 	natsMetricsImage   string
 	logger             *zap.SugaredLogger
+	cfAPI *codefresh.API
 }
 
 // NewReconciler returns a new reconciler
-func NewReconciler(client client.Client, scheme *runtime.Scheme, natsStreamingImage, natsMetricsImage string, logger *zap.SugaredLogger) reconcile.Reconciler {
-	return &reconciler{client: client, scheme: scheme, natsStreamingImage: natsStreamingImage, natsMetricsImage: natsMetricsImage, logger: logger}
+func NewReconciler(client client.Client, scheme *runtime.Scheme, natsStreamingImage, natsMetricsImage string, logger *zap.SugaredLogger, cfAPI *codefresh.API) reconcile.Reconciler {
+	return &reconciler{client: client, scheme: scheme, natsStreamingImage: natsStreamingImage, natsMetricsImage: natsMetricsImage, logger: logger, cfAPI: cfAPI}
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {

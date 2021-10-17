@@ -27,6 +27,84 @@ type Config struct {
 	AuthToken string
 }
 
+type API struct {
+	cfConfig *Config
+	client *http.Client
+}
+
+func NewAPI(ctx context.Context, namespace string) (*API, error) {
+	config, err := GetCodefreshConfig(ctx, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	return &API{
+		cfConfig: config,
+		client: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+	}, nil
+}
+
+func (a *API) ReportEvent(eventJson []byte) error {
+	url := a.cfConfig.BaseURL + "/2.0/api/events/event-payload"
+	return a.sendJSON(eventJson, url)
+}
+
+func (a *API) ReportError(eventJson []byte) error {
+	url := a.cfConfig.BaseURL + "/2.0/api/events/error"
+	return a.sendJSON(eventJson, url)}
+
+func (a *API) sendJSON(eventJson []byte, url string) error {
+	contentType := "application/json"
+	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(eventJson))
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Authorization", a.cfConfig.AuthToken)
+
+	res, err := a.client.Do(req)
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("failed reporting to Codefresh, event: %s", string(eventJson)))
+	}
+	defer res.Body.Close()
+
+	isStatusOK := res.StatusCode >= 200 && res.StatusCode < 300
+	if !isStatusOK {
+		b, _ := ioutil.ReadAll(res.Body)
+		return errors.Errorf("failed reporting to Codefresh, got response: status code %d and body %s, event: %s",
+			res.StatusCode, string(b), string(eventJson))
+	}
+
+	return nil
+}
+
+
+
+//var config Config
+//
+//func GetConfig() *Config {
+//	return &config
+//}
+//
+//func initConfig(ctx context.Context, namespace string) (*Config, error) {
+//	kubeClient, err := common.CreateKubeClient()
+//	if err != nil {
+//		return nil, err
+//	}
+//	baseURL, err := getCodefreshBaseURL(ctx, kubeClient, namespace)
+//	if err != nil {
+//		return nil, err
+//	}
+//	token, err := getCodefreshAuthToken(ctx, kubeClient, namespace)
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//	return &Config{
+//		BaseURL:   baseURL,
+//		AuthToken: token,
+//	}, nil
+//}
+
 func GetCodefreshConfig(ctx context.Context, namespace string) (*Config, error) {
 	kubeClient, err := common.CreateKubeClient()
 	if err != nil {

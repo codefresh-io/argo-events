@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"github.com/argoproj/argo-events/codefresh"
 	"os"
 	"reflect"
 
@@ -29,6 +31,8 @@ import (
 const (
 	natsStreamingEnvVar       = "NATS_STREAMING_IMAGE"
 	natsMetricsExporterEnvVar = "NATS_METRICS_EXPORTER_IMAGE"
+
+	codefreshNamespaceEnvVar = "CODEFRESH_NAMESPACE"
 )
 
 func Start(namespaced bool, managedNamespace string) {
@@ -45,12 +49,27 @@ func Start(namespaced bool, managedNamespace string) {
 		MetricsBindAddress:     fmt.Sprintf(":%d", common.ControllerMetricsPort),
 		HealthProbeBindAddress: ":8081",
 	}
+
+	var cfNamespace string
+
 	if namespaced {
 		opts.Namespace = managedNamespace
+		cfNamespace = managedNamespace
 	}
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), opts)
 	if err != nil {
 		logger.Fatalw("unable to get a controller-runtime manager", zap.Error(err))
+	}
+
+	ns, defined := os.LookupEnv(codefreshNamespaceEnvVar)
+	if defined {
+		cfNamespace = ns
+	} else if len(cfNamespace) == 0 {
+		logger.Fatalf("required environment variable '%s' not defined", codefreshNamespaceEnvVar)
+	}
+	cfAPI, err := codefresh.NewAPI(context.Background(), managedNamespace)
+	if err != nil {
+		logger.Fatalw("unable to initialise Codefresh API", zap.Error(err))
 	}
 
 	// Readyness probe
@@ -77,7 +96,7 @@ func Start(namespaced bool, managedNamespace string) {
 
 	// A controller with DefaultControllerRateLimiter
 	c, err := controller.New(eventbus.ControllerName, mgr, controller.Options{
-		Reconciler: eventbus.NewReconciler(mgr.GetClient(), mgr.GetScheme(), natsStreamingImage, natsMetricsImage, logger),
+		Reconciler: eventbus.NewReconciler(mgr.GetClient(), mgr.GetScheme(), natsStreamingImage, natsMetricsImage, logger, cfAPI),
 	})
 	if err != nil {
 		logger.Fatalw("unable to set up individual controller", zap.Error(err))
