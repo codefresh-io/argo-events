@@ -51,19 +51,20 @@ func (a *API) ReportEvent(eventJson []byte) error {
 	return a.sendJSON(eventJson, url)
 }
 
-func (a *API) ReportError(eventJson []byte) error {
+func (a *API) ReportError(errorJson []byte) error {
 	url := a.cfConfig.BaseURL + "/2.0/api/events/error"
-	return a.sendJSON(eventJson, url)}
+	return a.sendJSON(errorJson, url)
+}
 
-func (a *API) sendJSON(eventJson []byte, url string) error {
+func (a *API) sendJSON(jsonBody []byte, url string) error {
 	contentType := "application/json"
-	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(eventJson))
+	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Authorization", a.cfConfig.AuthToken)
 
 	res, err := a.client.Do(req)
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("failed reporting to Codefresh, event: %s", string(eventJson)))
+		return errors.Wrap(err, fmt.Sprintf("failed reporting to Codefresh, event: %s", string(jsonBody)))
 	}
 	defer res.Body.Close()
 
@@ -71,7 +72,7 @@ func (a *API) sendJSON(eventJson []byte, url string) error {
 	if !isStatusOK {
 		b, _ := ioutil.ReadAll(res.Body)
 		return errors.Errorf("failed reporting to Codefresh, got response: status code %d and body %s, event: %s",
-			res.StatusCode, string(b), string(eventJson))
+			res.StatusCode, string(b), string(jsonBody))
 	}
 
 	return nil
