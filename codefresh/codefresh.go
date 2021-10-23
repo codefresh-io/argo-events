@@ -39,6 +39,8 @@ type API struct {
 	isInitialised bool
 }
 
+var withRetry = common.Connect // alias
+
 func NewAPI(ctx context.Context, namespace string) (*API, error) {
 	logger := logging.FromContext(ctx)
 	config, err := getCodefreshConfig(ctx, namespace)
@@ -47,13 +49,13 @@ func NewAPI(ctx context.Context, namespace string) (*API, error) {
 	}
 
 	return &API{
-		ctx:      ctx,
-		logger:   logger,
-		cfConfig: config,
+		ctx:           ctx,
+		logger:        logger,
+		cfConfig:      config,
+		isInitialised: true,
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		isInitialised: true,
 	}, nil
 }
 
@@ -105,28 +107,30 @@ func (a *API) ReportError(originalError error) {
 }
 
 func (a *API) sendJSON(jsonBody []byte, url string) error {
-	req, err := http.NewRequestWithContext(a.ctx, "POST", url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return err
-	}
+	return withRetry(&common.DefaultBackoff, func() error {
+		req, err := http.NewRequestWithContext(a.ctx, "POST", url, bytes.NewBuffer(jsonBody))
+		if err != nil {
+			return err
+		}
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", a.cfConfig.AuthToken)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", a.cfConfig.AuthToken)
 
-	res, err := a.client.Do(req)
-	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("failed reporting to Codefresh, event: %s", string(jsonBody)))
-	}
-	defer res.Body.Close()
+		res, err := a.client.Do(req)
+		if err != nil {
+			return errors.Wrap(err, fmt.Sprintf("failed reporting to Codefresh, event: %s", string(jsonBody)))
+		}
+		defer res.Body.Close()
 
-	isStatusOK := res.StatusCode >= 200 && res.StatusCode < 300
-	if !isStatusOK {
-		b, _ := ioutil.ReadAll(res.Body)
-		return errors.Errorf("failed reporting to Codefresh, got response: status code %d and body %s, event: %s",
-			res.StatusCode, string(b), string(jsonBody))
-	}
+		isStatusOK := res.StatusCode >= 200 && res.StatusCode < 300
+		if !isStatusOK {
+			b, _ := ioutil.ReadAll(res.Body)
+			return errors.Errorf("failed reporting to Codefresh, got response: status code %d and body %s, original request body: %s",
+				res.StatusCode, string(b), string(jsonBody))
+		}
 
-	return nil
+		return nil
+	})
 }
 
 func getCodefreshConfig(ctx context.Context, namespace string) (*Config, error) {
