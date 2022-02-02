@@ -163,6 +163,9 @@ func (ac *AdmissionController) register(
 	webhook := &admissionregistrationv1.ValidatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: ac.Options.WebhookName,
+      Annotations: map[string]string{
+        "argocd.argoproj.io/sync-wave": "-1",
+      },
 		},
 		Webhooks: []admissionregistrationv1.ValidatingWebhook{{
 			Name:                    ac.Options.WebhookName,
