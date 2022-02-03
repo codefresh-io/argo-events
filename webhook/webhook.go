@@ -183,14 +183,8 @@ func (ac *AdmissionController) register(
 			FailurePolicy: &failurePolicy,
 		}},
 	}
-	deployment, err := ac.Client.AppsV1().Deployments(ac.Options.Namespace).Get(ctx, ac.Options.DeploymentName, metav1.GetOptions{})
-	if err != nil {
-		return errors.Wrapf(err, "failed to fetch webhook deployment")
-	}
-	deploymentRef := metav1.NewControllerRef(deployment, appsv1.SchemeGroupVersion.WithKind("Deployment"))
-	webhook.OwnerReferences = append(webhook.OwnerReferences, *deploymentRef)
 
-	_, err = client.Create(ctx, webhook, metav1.CreateOptions{})
+  _, err := client.Create(ctx, webhook, metav1.CreateOptions{})
 	if err != nil {
 		if !apierrors.IsAlreadyExists(err) {
 			return errors.Wrap(err, "failed to create a webhook")
