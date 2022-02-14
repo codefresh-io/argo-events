@@ -697,6 +697,13 @@ type OwnedRepositories struct {
 	Names []string `json:"names,omitempty" protobuf:"bytes,2,rep,name=names"`
 }
 
+type PayloadEnrichmentFlags struct {
+	// FetchPROnPRCommentAdded determines whether to enrich the payload provided by GitHub
+	// on "pull request comment added" events, with the full pull request info
+	// +optional
+	FetchPROnPRCommentAdded bool `json:"fetchPROnPRCommentAdded,omitempty" protobuf:"bytes,1,opt,name=fetchPROnPRCommentAdded"`
+}
+
 type GithubAppCreds struct {
 	// PrivateKey refers to a K8s secret containing the GitHub app private key
 	PrivateKey *corev1.SecretKeySelector `json:"privateKey" protobuf:"bytes,1,opt,name=privateKey"`
@@ -762,6 +769,10 @@ type GithubEventSource struct {
 	// Filter
 	// +optional
 	Filter *EventSourceFilter `json:"filter,omitempty" protobuf:"bytes,18,opt,name=filter"`
+	// PayloadEnrichment holds flags that determine whether to enrich GitHub's original payload with
+	// additional information.
+	// +optional
+	PayloadEnrichment PayloadEnrichmentFlags `json:"payloadEnrichment,omitempty" protobuf:"bytes,19,rep,name=payloadEnrichment"`
 }
 
 func (g GithubEventSource) GetOwnedRepositories() []OwnedRepositories {

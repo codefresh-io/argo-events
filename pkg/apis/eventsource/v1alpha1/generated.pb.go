@@ -998,6 +998,34 @@ func (m *OwnedRepositories) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_OwnedRepositories proto.InternalMessageInfo
 
+func (m *PayloadEnrichmentFlags) Reset()      { *m = PayloadEnrichmentFlags{} }
+func (*PayloadEnrichmentFlags) ProtoMessage() {}
+func (*PayloadEnrichmentFlags) Descriptor() ([]byte, []int) {
+	return fileDescriptor_c9ac5d6cd016403b, []int{28}
+}
+func (m *PayloadEnrichmentFlags) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *PayloadEnrichmentFlags) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	b = b[:cap(b)]
+	n, err := m.MarshalToSizedBuffer(b)
+	if err != nil {
+		return nil, err
+	}
+	return b[:n], nil
+}
+func (m *PayloadEnrichmentFlags) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PayloadEnrichmentFlags.Merge(m, src)
+}
+func (m *PayloadEnrichmentFlags) XXX_Size() int {
+	return m.Size()
+}
+func (m *PayloadEnrichmentFlags) XXX_DiscardUnknown() {
+	xxx_messageInfo_PayloadEnrichmentFlags.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_PayloadEnrichmentFlags proto.InternalMessageInfo
+
 func (m *PubSubEventSource) Reset()      { *m = PubSubEventSource{} }
 func (*PubSubEventSource) ProtoMessage() {}
 func (*PubSubEventSource) Descriptor() ([]byte, []int) {
@@ -1522,6 +1550,7 @@ func init() {
 	proto.RegisterType((*NSQEventSource)(nil), "github.com.argoproj.argo_events.pkg.apis.eventsource.v1alpha1.NSQEventSource")
 	proto.RegisterMapType((map[string]string)(nil), "github.com.argoproj.argo_events.pkg.apis.eventsource.v1alpha1.NSQEventSource.MetadataEntry")
 	proto.RegisterType((*OwnedRepositories)(nil), "github.com.argoproj.argo_events.pkg.apis.eventsource.v1alpha1.OwnedRepositories")
+	proto.RegisterType((*PayloadEnrichmentFlags)(nil), "github.com.argoproj.argo_events.pkg.apis.eventsource.v1alpha1.PayloadEnrichmentFlags")
 	proto.RegisterType((*PubSubEventSource)(nil), "github.com.argoproj.argo_events.pkg.apis.eventsource.v1alpha1.PubSubEventSource")
 	proto.RegisterMapType((map[string]string)(nil), "github.com.argoproj.argo_events.pkg.apis.eventsource.v1alpha1.PubSubEventSource.MetadataEntry")
 	proto.RegisterType((*PulsarEventSource)(nil), "github.com.argoproj.argo_events.pkg.apis.eventsource.v1alpha1.PulsarEventSource")
@@ -4407,6 +4436,18 @@ func (m *GithubEventSource) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	{
+		size, err := m.PayloadEnrichment.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarintGenerated(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0x1
+	i--
+	dAtA[i] = 0x82
 	if m.Filter != nil {
 		{
 			size, err := m.Filter.MarshalToSizedBuffer(dAtA[:i])
@@ -5476,6 +5517,37 @@ func (m *OwnedRepositories) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i = encodeVarintGenerated(dAtA, i, uint64(len(m.Owner)))
 	i--
 	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
+}
+
+func (m *PayloadEnrichmentFlags) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *PayloadEnrichmentFlags) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *PayloadEnrichmentFlags) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	i--
+	if m.FetchPROnPRCommentAdded {
+		dAtA[i] = 1
+	} else {
+		dAtA[i] = 0
+	}
+	i--
+	dAtA[i] = 0x8
 	return len(dAtA) - i, nil
 }
 
@@ -7797,6 +7869,8 @@ func (m *GithubEventSource) Size() (n int) {
 			n += 1 + l + sovGenerated(uint64(l))
 		}
 	}
+	l = m.PayloadEnrichment.Size()
+	n += 2 + l + sovGenerated(uint64(l))
 	if len(m.Organizations) > 0 {
 		for _, s := range m.Organizations {
 			l = len(s)
@@ -8128,6 +8202,16 @@ func (m *OwnedRepositories) Size() (n int) {
 			n += 1 + l + sovGenerated(uint64(l))
 		}
 	}
+	return n
+}
+
+func (m *PayloadEnrichmentFlags) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	n += 2
 	return n
 }
 
@@ -9401,6 +9485,7 @@ func (this *GithubEventSource) String() string {
 		`DeleteHookOnFinish:` + fmt.Sprintf("%v", this.DeleteHookOnFinish) + `,`,
 		`Metadata:` + mapStringForMetadata + `,`,
 		`Repositories:` + repeatedStringForRepositories + `,`,
+		`PayloadEnrichment:` + strings.Replace(strings.Replace(this.PayloadEnrichment.String(), "PayloadEnrichmentFlags", "PayloadEnrichmentFlags", 1), `&`, ``, 1) + `,`,
 		`Organizations:` + fmt.Sprintf("%v", this.Organizations) + `,`,
 		`GithubApp:` + strings.Replace(this.GithubApp.String(), "GithubAppCreds", "GithubAppCreds", 1) + `,`,
 		`Filter:` + strings.Replace(this.Filter.String(), "EventSourceFilter", "EventSourceFilter", 1) + `,`,
@@ -9614,6 +9699,16 @@ func (this *OwnedRepositories) String() string {
 	s := strings.Join([]string{`&OwnedRepositories{`,
 		`Owner:` + fmt.Sprintf("%v", this.Owner) + `,`,
 		`Names:` + fmt.Sprintf("%v", this.Names) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *PayloadEnrichmentFlags) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&PayloadEnrichmentFlags{`,
+		`FetchPROnPRCommentAdded:` + fmt.Sprintf("%v", this.FetchPROnPRCommentAdded) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -19448,6 +19543,39 @@ func (m *GithubEventSource) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 16:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PayloadEnrichment", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenerated
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.PayloadEnrichment.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipGenerated(dAtA[iNdEx:])
@@ -22688,6 +22816,76 @@ func (m *OwnedRepositories) Unmarshal(dAtA []byte) error {
 			}
 			m.Names = append(m.Names, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipGenerated(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *PayloadEnrichmentFlags) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowGenerated
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: PayloadEnrichmentFlags: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: PayloadEnrichmentFlags: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field FetchPROnPRCommentAdded", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenerated
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.FetchPROnPRCommentAdded = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipGenerated(dAtA[iNdEx:])
