@@ -1497,6 +1497,10 @@
           "description": "DeprecatedOwner refers to GitHub owner name i.e. argoproj Deprecated: use Repositories instead. Will be unsupported in v 1.6",
           "type": "string"
         },
+        "payloadEnrichment": {
+          "$ref": "#/definitions/io.argoproj.eventsource.v1alpha1.PayloadEnrichmentFlags",
+          "description": "PayloadEnrichment holds flags that determine whether to enrich GitHub's original payload with additional information."
+        },
         "repositories": {
           "description": "Repositories holds the information of repositories, which uses repo owner as the key, and list of repo names as the value. Not required if Organizations is set.",
           "items": {
@@ -1915,6 +1919,15 @@
         "owner": {
           "description": "Organization or user name",
           "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "io.argoproj.eventsource.v1alpha1.PayloadEnrichmentFlags": {
+      "properties": {
+        "fetchPROnPRCommentAdded": {
+          "description": "FetchPROnPRCommentAdded determines whether to enrich the payload provided by GitHub on \"pull request comment added\" events, with the full pull request info",
+          "type": "boolean"
         }
       },
       "type": "object"

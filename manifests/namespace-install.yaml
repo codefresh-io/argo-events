@@ -317,6 +317,7 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         image: quay.io/codefresh/argo-events:v1.6.0-cap-CR-9042
+        imagePullPolicy: Always
         livenessProbe:
           httpGet:
             path: /healthz
