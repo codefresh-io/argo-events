@@ -263,7 +263,6 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 			var subLock uint32
 			wg1 := &sync.WaitGroup{}
 			closeSubCh := make(chan struct{})
-			resetConditionsCh := make(chan struct{})
 
 			resetConditionsCh := make(chan struct{})
 			var lastResetTime time.Time
@@ -340,35 +339,6 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 			}
 
 			subscribeOnce(&subLock, subscribeFunc)
-
-			if len(trigger.Template.ConditionsReset) > 0 {
-				for _, c := range trigger.Template.ConditionsReset {
-					if c.ByTime == nil {
-						continue
-					}
-					opts := []cronlib.Option{
-						cronlib.WithParser(cronlib.NewParser(cronlib.Minute | cronlib.Hour | cronlib.Dom | cronlib.Month | cronlib.Dow)),
-						cronlib.WithChain(cronlib.Recover(cronlib.DefaultLogger)),
-					}
-					if c.ByTime.Timezone != "" {
-						location, err := time.LoadLocation(c.ByTime.Timezone)
-						if err != nil {
-							logger.Errorw("failed to load timezone", zap.Error(err))
-							continue
-						}
-						opts = append(opts, cronlib.WithLocation(location))
-					}
-					cr := cronlib.New(opts...)
-					_, err = cr.AddFunc(c.ByTime.Cron, func() {
-						resetConditionsCh <- struct{}{}
-					})
-					if err != nil {
-						logger.Errorw("failed to add cron schedule", zap.Error(err))
-						continue
-					}
-					cr.Start()
-				}
-			}
 
 			logger.Infof("starting eventbus connection daemon for client %s...", clientID)
 			ticker := time.NewTicker(5 * time.Second)
