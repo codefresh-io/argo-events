@@ -239,10 +239,8 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 							TypeMeta:   sensor.TypeMeta,
 						},
 					)
-				} else {
-					if !result {
-						logger.Warnf("Event [%s] discarded due to filtering", eventToString(argoEvent))
-					}
+				} else if !result {
+					logger.Warnf("Event [%s] discarded due to filtering", eventToString(argoEvent))
 				}
 				return result
 			}
@@ -268,7 +266,6 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 			var lastResetTime time.Time
 			if len(trigger.Template.ConditionsReset) > 0 {
 				for _, c := range trigger.Template.ConditionsReset {
-
 					if c.ByTime == nil {
 						continue
 					}
