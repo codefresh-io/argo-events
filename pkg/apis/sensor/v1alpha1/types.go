@@ -176,6 +176,14 @@ type Template struct {
 	Affinity *corev1.Affinity `json:"affinity,omitempty" protobuf:"bytes,11,opt,name=affinity"`
 }
 
+type LogicalOperator string
+
+const (
+	AndLogicalOperator   LogicalOperator = "and" // Equal to &&
+	OrLogicalOperator    LogicalOperator = "or"  // Equal to ||
+	EmptyLogicalOperator LogicalOperator = ""    // Empty will default to AND (&&)
+)
+
 // EventDependency describes a dependency
 type EventDependency struct {
 	// Name is a unique name of this dependency
@@ -186,6 +194,22 @@ type EventDependency struct {
 	EventName string `json:"eventName" protobuf:"bytes,3,name=eventName"`
 	// Filters and rules governing toleration of success and constraints on the context and data of an event
 	Filters *EventDependencyFilter `json:"filters,omitempty" protobuf:"bytes,4,opt,name=filters"`
+	// Transform transforms the event data
+	Transform *EventDependencyTransformer `json:"transform,omitempty" protobuf:"bytes,5,opt,name=transform"`
+	// FiltersLogicalOperator defines how different filters are evaluated together.
+	// Available values: and (&&), or (||)
+	// Is optional and if left blank treated as and (&&).
+	FiltersLogicalOperator LogicalOperator `json:"filtersLogicalOperator,omitempty" protobuf:"bytes,6,opt,name=filtersLogicalOperator,casttype=LogicalOperator"`
+}
+
+// EventDependencyTransformer transforms the event
+type EventDependencyTransformer struct {
+	// JQ holds the jq command applied for transformation
+	// +optional
+	JQ string `json:"jq,omitempty" protobuf:"bytes,1,opt,name=jq"`
+	// Script refers to a Lua script used to transform the event
+	// +optional
+	Script string `json:"script,omitempty" protobuf:"bytes,2,opt,name=script"`
 }
 
 // EventDependencyFilter defines filters and constraints for a event.
@@ -198,6 +222,14 @@ type EventDependencyFilter struct {
 	Data []DataFilter `json:"data,omitempty" protobuf:"bytes,3,rep,name=data"`
 	// Exprs contains the list of expressions evaluated against the event payload.
 	Exprs []ExprFilter `json:"exprs,omitempty" protobuf:"bytes,4,rep,name=exprs"`
+	// DataLogicalOperator defines how multiple Data filters (if defined) are evaluated together.
+	// Available values: and (&&), or (||)
+	// Is optional and if left blank treated as and (&&).
+	DataLogicalOperator LogicalOperator `json:"dataLogicalOperator,omitempty" protobuf:"bytes,5,opt,name=dataLogicalOperator,casttype=DataLogicalOperator"`
+	// ExprLogicalOperator defines how multiple Exprs filters (if defined) are evaluated together.
+	// Available values: and (&&), or (||)
+	// Is optional and if left blank treated as and (&&).
+	ExprLogicalOperator LogicalOperator `json:"exprLogicalOperator,omitempty" protobuf:"bytes,6,opt,name=exprLogicalOperator,casttype=ExprLogicalOperator"`
 }
 
 type ExprFilter struct {
