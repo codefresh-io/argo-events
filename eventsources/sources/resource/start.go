@@ -44,6 +44,7 @@ import (
 	apicommon "github.com/argoproj/argo-events/pkg/apis/common"
 	"github.com/argoproj/argo-events/pkg/apis/events"
 	"github.com/argoproj/argo-events/pkg/apis/eventsource/v1alpha1"
+	"github.com/danielm-codefresh/argo-multi-cluster/pkg/clusterauth"
 )
 
 // InformerEvent holds event generated from resource state change
@@ -88,12 +89,32 @@ func (el *EventListener) StartListening(ctx context.Context, dispatch func([]byt
 	if err != nil {
 		return errors.Wrapf(err, "failed to get a K8s rest config for the event source %s", el.GetEventName())
 	}
+
+	resourceEventSource := &el.ResourceEventSource
+
+	if resourceEventSource.Cluster != "" {
+		clientset, err := dynamic.NewForConfig(restConfig)
+		if err != nil {
+			return err
+		}
+
+		secret, err := clusterauth.GetClusterSecret(clientset, resourceEventSource.Cluster)
+		if err != nil {
+			return err
+		}
+
+		cluster, err := clusterauth.SecretToCluster(*secret)
+		if err != nil {
+			return err
+		}
+
+		restConfig = cluster.RESTConfig()
+	}
+
 	client, err := dynamic.NewForConfig(restConfig)
 	if err != nil {
 		return errors.Wrapf(err, "failed to set up a dynamic K8s client for the event source %s", el.GetEventName())
 	}
-
-	resourceEventSource := &el.ResourceEventSource
 
 	gvr := schema.GroupVersionResource{
 		Group:    resourceEventSource.Group,
@@ -157,6 +178,7 @@ func (el *EventListener) StartListening(ctx context.Context, dispatch func([]byt
 			Version:   resourceEventSource.Version,
 			Resource:  resourceEventSource.Resource,
 			Metadata:  resourceEventSource.Metadata,
+			Cluster: resourceEventSource.Cluster,
 		}
 
 		eventBody, err := json.Marshal(eventData)
