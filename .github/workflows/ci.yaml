@@ -97,9 +97,9 @@ jobs:
           path: argo
       - name: Replace test directory by Argo code
         run: |
-          ls
           rm -rf test
           cp -r argo test
+          ls -R test
       - name: Restore go build cache
         uses: actions/cache@v1
         with:
@@ -125,6 +125,7 @@ jobs:
         env:
           GOPATH: /home/runner/go
         run: |
+          ls -R test
           KUBECONFIG=~/.kube/argo-events-e2e-config IMAGE_NAMESPACE=k3d-e2e-registry:5111 VERSION=${{ github.sha }} DOCKER_PUSH=true make start
       - name: Run tests
         env:
