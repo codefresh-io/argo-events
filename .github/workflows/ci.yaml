@@ -98,7 +98,7 @@ jobs:
       - name: Replace test directory by Argo code
         run: |
           rm -rf test
-          cp -r argo test
+          cp -r argo/test test
           ls -R test
       - name: Restore go build cache
         uses: actions/cache@v1
