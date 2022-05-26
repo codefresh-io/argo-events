@@ -19,13 +19,13 @@ package sensor
 import (
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
-	"github.com/Knetic/govaluate"
+	"github.com/pkg/errors"
+	cronlib "github.com/robfig/cron/v3"
+
 	"github.com/argoproj/argo-events/common"
 	"github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
-	"github.com/pkg/errors"
 )
 
 // ValidateSensor accepts a sensor and performs validation against it
@@ -37,32 +37,10 @@ func ValidateSensor(s *v1alpha1.Sensor) error {
 		s.Status.MarkDependenciesNotProvided("InvalidDependencies", err.Error())
 		return err
 	}
-	// DEPRECATED.
-	if s.Spec.DeprecatedCircuit != "" {
-		if s.Spec.DependencyGroups == nil {
-			s.Status.MarkDependenciesNotProvided("InvalidCircuit", "Dependency groups not provided.")
-			return errors.New("dependency groups not provided")
-		}
-		c := strings.ReplaceAll(s.Spec.DeprecatedCircuit, "-", "\\-")
-		expression, err := govaluate.NewEvaluableExpression(c)
-		if err != nil {
-			s.Status.MarkDependenciesNotProvided("InvalidCircuit", "Invalid circurit expression.")
-			return errors.Errorf("circuit expression can't be created for dependency groups. err: %+v", err)
-		}
-
-		groups := make(map[string]interface{}, len(s.Spec.DependencyGroups))
-		for _, group := range s.Spec.DependencyGroups {
-			groups[group.Name] = false
-		}
-		if _, err = expression.Evaluate(groups); err != nil {
-			s.Status.MarkDependenciesNotProvided("InvalidCircuit", "Circuit expression can not be evaluated for dependency groups.")
-			return errors.Errorf("circuit expression can't be evaluated for dependency groups. err: %+v", err)
-		}
-	}
 	s.Status.MarkDependenciesProvided()
 	err := validateTriggers(s.Spec.Triggers)
 	if err != nil {
-		s.Status.MarkTriggersNotProvided("InvalidTriggers", "Invalid triggers.")
+		s.Status.MarkTriggersNotProvided("InvalidTriggers", err.Error())
 		return err
 	}
 	s.Status.MarkTriggersProvided()
@@ -78,13 +56,13 @@ func validateTriggers(triggers []v1alpha1.Trigger) error {
 	trigNames := make(map[string]bool)
 
 	for _, trigger := range triggers {
+		if err := validateTriggerTemplate(trigger.Template); err != nil {
+			return err
+		}
 		if _, ok := trigNames[trigger.Template.Name]; ok {
 			return fmt.Errorf("duplicate trigger name: %s", trigger.Template.Name)
 		}
 		trigNames[trigger.Template.Name] = true
-		if err := validateTriggerTemplate(trigger.Template); err != nil {
-			return err
-		}
 		if err := validateTriggerPolicy(&trigger); err != nil {
 			return err
 		}
@@ -103,9 +81,19 @@ func validateTriggerTemplate(template *v1alpha1.TriggerTemplate) error {
 	if template.Name == "" {
 		return errors.Errorf("trigger must define a name")
 	}
-	// DEPRECATED.
-	if template.DeprecatedSwitch != nil && template.DeprecatedSwitch.All != nil && template.DeprecatedSwitch.Any != nil {
-		return errors.Errorf("trigger condition can't have both any and all condition")
+	if len(template.ConditionsReset) > 0 {
+		for _, c := range template.ConditionsReset {
+			if c.ByTime == nil {
+				return errors.Errorf("invalid conditionsReset")
+			}
+			parser := cronlib.NewParser(cronlib.Minute | cronlib.Hour | cronlib.Dom | cronlib.Month | cronlib.Dow)
+			if _, err := parser.Parse(c.ByTime.Cron); err != nil {
+				return errors.Errorf("invalid cron expression %q", c.ByTime.Cron)
+			}
+			if _, err := time.LoadLocation(c.ByTime.Timezone); err != nil {
+				return errors.Errorf("invalid timezone %q", c.ByTime.Timezone)
+			}
+		}
 	}
 	if template.K8s != nil {
 		if err := validateK8STrigger(template.K8s); err != nil {
@@ -163,9 +151,7 @@ func validateK8STrigger(trigger *v1alpha1.StandardK8STrigger) error {
 	if trigger.Source == nil {
 		return errors.New("k8s trigger does not contain an absolute action")
 	}
-	if trigger.GroupVersionResource.Size() == 0 {
-		return errors.New("must provide group, version and resource for the resource")
-	}
+
 	switch trigger.Operation {
 	case "", v1alpha1.Create, v1alpha1.Patch, v1alpha1.Update, v1alpha1.Delete:
 
@@ -190,9 +176,7 @@ func validateArgoWorkflowTrigger(trigger *v1alpha1.ArgoWorkflowTrigger) error {
 	if trigger.Source == nil {
 		return errors.New("argoWorkflow trigger does not contain an absolute action")
 	}
-	if trigger.GroupVersionResource.Size() == 0 {
-		return errors.New("must provide group, version and resource for the resource")
-	}
+
 	switch trigger.Operation {
 	case v1alpha1.Submit, v1alpha1.Suspend, v1alpha1.Retry, v1alpha1.Resume, v1alpha1.Resubmit, v1alpha1.Terminate:
 	default:
@@ -286,9 +270,6 @@ func validateAWSLambdaTrigger(trigger *v1alpha1.AWSLambdaTrigger) error {
 	}
 	if trigger.Region == "" {
 		return errors.New("region in not specified")
-	}
-	if trigger.AccessKey == nil || trigger.SecretKey == nil {
-		return errors.New("either accesskey or secretkey secret selector is not specified")
 	}
 	if trigger.Payload == nil {
 		return errors.New("payload parameters are not specified")
@@ -388,7 +369,7 @@ func validateCustomTrigger(trigger *v1alpha1.CustomTrigger) error {
 		return errors.New("trigger body can't be empty")
 	}
 	if trigger.Secure {
-		if trigger.CertSecret == nil && trigger.DeprecatedCertFilePath == "" {
+		if trigger.CertSecret == nil {
 			return errors.New("certSecret can't be nil when the trigger server connection is secure")
 		}
 	}

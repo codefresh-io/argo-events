@@ -25,12 +25,13 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	cronlib "github.com/robfig/cron"
+	cronlib "github.com/robfig/cron/v3"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/argoproj/argo-events/common"
 	"github.com/argoproj/argo-events/common/logging"
+	eventsourcecommon "github.com/argoproj/argo-events/eventsources/common"
 	"github.com/argoproj/argo-events/eventsources/persist"
 	metrics "github.com/argoproj/argo-events/metrics"
 	apicommon "github.com/argoproj/argo-events/pkg/apis/common"
@@ -134,7 +135,7 @@ func (el *EventListener) getExecutionTime() (time.Time, error) {
 }
 
 // StartListening starts listening events
-func (el *EventListener) StartListening(ctx context.Context, dispatch func([]byte) error) error {
+func (el *EventListener) StartListening(ctx context.Context, dispatch func([]byte, ...eventsourcecommon.Options) error) error {
 	el.log = logging.FromContext(ctx).
 		With(logging.LabelEventSourceType, el.GetEventSourceType(), logging.LabelEventName, el.GetEventName())
 	el.log.Info("started processing the calendar event source...")
@@ -196,9 +197,8 @@ func (el *EventListener) StartListening(ctx context.Context, dispatch func([]byt
 		}(time.Now())
 
 		eventData := &events.CalendarEventData{
-			EventTime:   tx.String(),
-			UserPayload: calendarEventSource.UserPayload,
-			Metadata:    calendarEventSource.Metadata,
+			EventTime: tx.String(),
+			Metadata:  calendarEventSource.Metadata,
 		}
 		payload, err := json.Marshal(eventData)
 		if err != nil {

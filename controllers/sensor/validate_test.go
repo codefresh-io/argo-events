@@ -25,7 +25,6 @@ import (
 	"github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
 	"github.com/ghodss/yaml"
 	"github.com/stretchr/testify/assert"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestValidateSensor(t *testing.T) {
@@ -97,11 +96,6 @@ func TestValidTriggers(t *testing.T) {
 				Template: &v1alpha1.TriggerTemplate{
 					Name: "fake-trigger",
 					K8s: &v1alpha1.StandardK8STrigger{
-						GroupVersionResource: metav1.GroupVersionResource{
-							Group:    "k8s.io",
-							Version:  "",
-							Resource: "pods",
-						},
 						Operation: "create",
 						Source:    &v1alpha1.ArtifactLocation{},
 					},
@@ -111,11 +105,6 @@ func TestValidTriggers(t *testing.T) {
 				Template: &v1alpha1.TriggerTemplate{
 					Name: "fake-trigger",
 					K8s: &v1alpha1.StandardK8STrigger{
-						GroupVersionResource: metav1.GroupVersionResource{
-							Group:    "k8s.io",
-							Version:  "",
-							Resource: "pods",
-						},
 						Operation: "create",
 						Source:    &v1alpha1.ArtifactLocation{},
 					},
@@ -125,5 +114,67 @@ func TestValidTriggers(t *testing.T) {
 		err := validateTriggers(triggers)
 		assert.NotNil(t, err)
 		assert.Equal(t, true, strings.Contains(err.Error(), "duplicate trigger name:"))
+	})
+
+	t.Run("empty trigger template", func(t *testing.T) {
+		triggers := []v1alpha1.Trigger{
+			{
+				Template: nil,
+			},
+		}
+		err := validateTriggers(triggers)
+		assert.NotNil(t, err)
+		assert.Equal(t, true, strings.Contains(err.Error(), "trigger template can't be nil"))
+	})
+
+	t.Run("invalid conditions reset - cron", func(t *testing.T) {
+		triggers := []v1alpha1.Trigger{
+			{
+				Template: &v1alpha1.TriggerTemplate{
+					Name:       "fake-trigger",
+					Conditions: "A && B",
+					ConditionsReset: []v1alpha1.ConditionsResetCriteria{
+						{
+							ByTime: &v1alpha1.ConditionsResetByTime{
+								Cron: "a * * * *",
+							},
+						},
+					},
+					K8s: &v1alpha1.StandardK8STrigger{
+						Operation: "create",
+						Source:    &v1alpha1.ArtifactLocation{},
+					},
+				},
+			},
+		}
+		err := validateTriggers(triggers)
+		assert.NotNil(t, err)
+		assert.Equal(t, true, strings.Contains(err.Error(), "invalid cron expression"))
+	})
+
+	t.Run("invalid conditions reset - timezone", func(t *testing.T) {
+		triggers := []v1alpha1.Trigger{
+			{
+				Template: &v1alpha1.TriggerTemplate{
+					Name:       "fake-trigger",
+					Conditions: "A && B",
+					ConditionsReset: []v1alpha1.ConditionsResetCriteria{
+						{
+							ByTime: &v1alpha1.ConditionsResetByTime{
+								Cron:     "* * * * *",
+								Timezone: "fake",
+							},
+						},
+					},
+					K8s: &v1alpha1.StandardK8STrigger{
+						Operation: "create",
+						Source:    &v1alpha1.ArtifactLocation{},
+					},
+				},
+			},
+		}
+		err := validateTriggers(triggers)
+		assert.NotNil(t, err)
+		assert.Equal(t, true, strings.Contains(err.Error(), "invalid timezone"))
 	})
 }

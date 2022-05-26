@@ -135,12 +135,13 @@ func buildDeployment(args *AdaptorArgs, eventBus *eventbusv1alpha1.EventBus) (*a
 	sensor := args.Sensor
 	sensorCopy := &v1alpha1.Sensor{
 		TypeMeta: metav1.TypeMeta{
-			Kind: sensor.Kind,
+			Kind:       sensor.Kind,
 			APIVersion: sensor.APIVersion,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: sensor.Namespace,
 			Name:      sensor.Name,
+			Labels:    common.CopyStringMap(sensor.Labels),
 		},
 		Spec: sensor.Spec,
 	}

@@ -27,6 +27,7 @@ import (
 
 	"github.com/argoproj/argo-events/common"
 	"github.com/argoproj/argo-events/common/logging"
+	eventsourcecommon "github.com/argoproj/argo-events/eventsources/common"
 	metrics "github.com/argoproj/argo-events/metrics"
 	"github.com/argoproj/argo-events/pkg/apis/eventsource/v1alpha1"
 )
@@ -104,13 +105,6 @@ func startServer(router Router, controller *Controller) {
 				if err != nil {
 					route.Logger.With("port", route.Context.Port).Errorw("failed to listen and serve with TLS configured", zap.Error(err))
 				}
-			case route.Context.DeprecatedServerCertPath != "" && route.Context.DeprecatedServerKeyPath != "":
-				// DEPRECATED.
-				route.Logger.Warn("ServerCertPath and ServerKeyPath are deprecated, please use ServerCertSecret and ServerKeySecret")
-				err := server.ListenAndServeTLS(route.Context.DeprecatedServerCertPath, route.Context.DeprecatedServerKeyPath)
-				if err != nil {
-					route.Logger.With("port", route.Context.Port).Errorw("failed to listen and serve with TLS configured", zap.Error(err))
-				}
 			default:
 				err := server.ListenAndServe()
 				if err != nil {
@@ -147,6 +141,10 @@ func startServer(router Router, controller *Controller) {
 					return
 				}
 			}
+			if request.Header.Get("Authorization") != "" {
+				// Auth secret stops here
+				request.Header.Set("Authorization", "*** Masked Auth Secret ***")
+			}
 			router.HandleRoute(writer, request)
 		})
 	}
@@ -180,7 +178,7 @@ func activateRoute(router Router, controller *Controller) {
 }
 
 // manageRouteChannels consumes data from route's data channel and stops the processing when the event source is stopped/removed
-func manageRouteChannels(router Router, dispatch func([]byte) error) {
+func manageRouteChannels(router Router, dispatch func([]byte, ...eventsourcecommon.Options) error) {
 	route := router.GetRoute()
 	logger := route.Logger
 	for {
@@ -201,7 +199,7 @@ func manageRouteChannels(router Router, dispatch func([]byte) error) {
 }
 
 // ManagerRoute manages the lifecycle of a route
-func ManageRoute(ctx context.Context, router Router, controller *Controller, dispatch func([]byte) error) error {
+func ManageRoute(ctx context.Context, router Router, controller *Controller, dispatch func([]byte, ...eventsourcecommon.Options) error) error {
 	route := router.GetRoute()
 
 	logger := route.Logger

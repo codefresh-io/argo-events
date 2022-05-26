@@ -29,9 +29,12 @@ import (
 	"github.com/antonmedv/expr"
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/pkg/errors"
+	cronlib "github.com/robfig/cron/v3"
+	"go.uber.org/ratelimit"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/argoproj/argo-events/codefresh"
 	"github.com/argoproj/argo-events/common"
 	"github.com/argoproj/argo-events/common/leaderelection"
 	"github.com/argoproj/argo-events/common/logging"
@@ -43,6 +46,8 @@ import (
 	sensortriggers "github.com/argoproj/argo-events/sensors/triggers"
 )
 
+var rateLimiters = make(map[string]ratelimit.Limiter)
+
 func subscribeOnce(subLock *uint32, subscribe func()) {
 	// acquire subLock if not already held
 	if !atomic.CompareAndSwapUint32(subLock, 0, 1) {
@@ -52,9 +57,9 @@ func subscribeOnce(subLock *uint32, subscribe func()) {
 	subscribe()
 }
 
-func (sensorCtx *SensorContext) getGroupAndClientID(depExpression string) (string, string) {
+func (sensorCtx *SensorContext) getGroupAndClientID(triggerName, depExpression string) (string, string) {
 	// Generate clientID with hash code
-	hashKey := fmt.Sprintf("%s-%s", sensorCtx.sensor.Name, depExpression)
+	hashKey := fmt.Sprintf("%s-%s-%s", sensorCtx.sensor.Name, triggerName, depExpression)
 	s1 := rand.NewSource(time.Now().UnixNano())
 	r1 := rand.New(s1)
 	hashVal := common.Hasher(hashKey)
@@ -74,7 +79,7 @@ func (sensorCtx *SensorContext) Start(ctx context.Context) error {
 	elector.RunOrDie(ctx, leaderelection.LeaderCallbacks{
 		OnStartedLeading: func(ctx context.Context) {
 			if err := sensorCtx.listenEvents(ctx); err != nil {
-				log.Errorw("failed to start", zap.Error(err))
+				log.Fatalw("failed to start", zap.Error(err))
 			}
 		},
 		OnStoppedLeading: func() {
@@ -84,42 +89,63 @@ func (sensorCtx *SensorContext) Start(ctx context.Context) error {
 	return nil
 }
 
+func initRateLimiter(trigger v1alpha1.Trigger) {
+	duration := time.Second
+	if trigger.RateLimit != nil {
+		switch trigger.RateLimit.Unit {
+		case v1alpha1.Minute:
+			duration = time.Minute
+		case v1alpha1.Hour:
+			duration = time.Hour
+		}
+		rateLimiters[trigger.Template.Name] = ratelimit.New(int(trigger.RateLimit.RequestsPerUnit), ratelimit.Per(duration))
+	} else {
+		rateLimiters[trigger.Template.Name] = ratelimit.NewUnlimited()
+	}
+}
+
 // listenEvents watches and handles events received from the gateway.
 func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 	logger := logging.FromContext(ctx)
 	sensor := sensorCtx.sensor
-	// Get a mapping of dependencyExpression: []triggers
-	triggerMapping := make(map[string][]v1alpha1.Trigger)
-	for _, trigger := range sensor.Spec.Triggers {
-		depExpr, err := sensorCtx.getDependencyExpression(ctx, trigger)
-		if err != nil {
-			logger.Errorw("failed to get dependency expression", zap.Error(err))
-			return err
-		}
-		triggers, ok := triggerMapping[depExpr]
-		if !ok {
-			triggers = []v1alpha1.Trigger{}
-		}
-		triggers = append(triggers, trigger)
-		triggerMapping[depExpr] = triggers
-	}
 
 	depMapping := make(map[string]v1alpha1.EventDependency)
 	for _, d := range sensor.Spec.Dependencies {
 		depMapping[d.Name] = d
 	}
 
-	cctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	wg := &sync.WaitGroup{}
-	for k, v := range triggerMapping {
+	for _, t := range sensor.Spec.Triggers {
+		initRateLimiter(t)
 		wg.Add(1)
-		go func(depExpression string, triggers []v1alpha1.Trigger) {
+		go func(trigger v1alpha1.Trigger) {
 			defer wg.Done()
-			// Calculate dependencies of each group of triggers.
+			depExpression, err := sensorCtx.getDependencyExpression(ctx, trigger)
+			if err != nil {
+				logger.Errorw("failed to get dependency expression", zap.Error(err))
+				sensorCtx.cfAPI.ReportError(
+					errors.Wrap(err, "failed to get dependency expression"),
+					codefresh.ErrorContext{
+						ObjectMeta: sensor.ObjectMeta,
+						TypeMeta:   sensor.TypeMeta,
+					},
+				)
+				return
+			}
+			// Calculate dependencies of each of the trigger.
 			de := strings.ReplaceAll(depExpression, "-", "\\-")
 			expr, err := govaluate.NewEvaluableExpression(de)
 			if err != nil {
 				logger.Errorw("failed to get new evaluable expression", zap.Error(err))
+				sensorCtx.cfAPI.ReportError(
+					errors.Wrap(err, "failed to get new evaluable expression"),
+					codefresh.ErrorContext{
+						ObjectMeta: sensor.ObjectMeta,
+						TypeMeta:   sensor.TypeMeta,
+					},
+				)
 				return
 			}
 			depNames := unique(expr.Vars())
@@ -128,6 +154,13 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 				dep, ok := depMapping[depName]
 				if !ok {
 					logger.Errorf("Dependency expression and dependency list do not match, %s is not found", depName)
+					sensorCtx.cfAPI.ReportError(
+						errors.Wrapf(err, "Dependency expression and dependency list do not match, %s is not found", depName),
+						codefresh.ErrorContext{
+							ObjectMeta: sensor.ObjectMeta,
+							TypeMeta:   sensor.TypeMeta,
+						},
+					)
 					return
 				}
 				d := eventbusdriver.Dependency{
@@ -137,16 +170,18 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 				}
 				deps = append(deps, d)
 			}
-
-			group, clientID := sensorCtx.getGroupAndClientID(depExpression)
-			ebDriver, err := eventbus.GetDriver(cctx, *sensorCtx.eventBusConfig, sensorCtx.eventBusSubject, clientID)
+			group, clientID := sensorCtx.getGroupAndClientID(trigger.Template.Name, depExpression)
+			ebDriver, err := eventbus.GetDriver(logging.WithLogger(ctx, logger.With(logging.LabelTriggerName, trigger.Template.Name)), *sensorCtx.eventBusConfig, sensorCtx.eventBusSubject, clientID)
 			if err != nil {
 				logger.Errorw("failed to get eventbus driver", zap.Error(err))
+				sensorCtx.cfAPI.ReportError(
+					errors.Wrap(err, "failed to get eventbus driver"),
+					codefresh.ErrorContext{
+						ObjectMeta: sensor.ObjectMeta,
+						TypeMeta:   sensor.TypeMeta,
+					},
+				)
 				return
-			}
-			triggerNames := []string{}
-			for _, t := range triggers {
-				triggerNames = append(triggerNames, t.Template.Name)
 			}
 			var conn eventbusdriver.Connection
 			err = common.Connect(&common.DefaultBackoff, func() error {
@@ -155,6 +190,14 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 				return err
 			})
 			if err != nil {
+				// report before fatal exit
+				sensorCtx.cfAPI.ReportError(
+					errors.Wrap(err, "failed to connect to event bus"),
+					codefresh.ErrorContext{
+						ObjectMeta: sensor.ObjectMeta,
+						TypeMeta:   sensor.TypeMeta,
+					},
+				)
 				logger.Fatalw("failed to connect to event bus", zap.Error(err))
 				return
 			}
@@ -172,20 +215,35 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 				result, err := sensordependencies.Filter(e, dep.Filters)
 				if err != nil {
 					logger.Errorw("failed to apply filters", zap.Error(err))
+					sensorCtx.cfAPI.ReportError(
+						errors.Wrap(err, "failed to apply filters"),
+						codefresh.ErrorContext{
+							ObjectMeta: sensor.ObjectMeta,
+							TypeMeta:   sensor.TypeMeta,
+						},
+					)
 					return false
 				}
 				return result
 			}
 
 			actionFunc := func(events map[string]cloudevents.Event) {
-				if err := sensorCtx.triggerActions(cctx, sensor, events, triggers); err != nil {
+				if err := sensorCtx.triggerActions(ctx, sensor, events, trigger); err != nil {
 					logger.Errorw("failed to trigger actions", zap.Error(err))
+					sensorCtx.cfAPI.ReportError(
+						errors.Wrap(err, "failed to trigger actions"),
+						codefresh.ErrorContext{
+							ObjectMeta: sensor.ObjectMeta,
+							TypeMeta:   sensor.TypeMeta,
+						},
+					)
 				}
 			}
 
 			var subLock uint32
 			wg1 := &sync.WaitGroup{}
 			closeSubCh := make(chan struct{})
+			resetConditionsCh := make(chan struct{})
 
 			subscribeFunc := func() {
 				wg1.Add(1)
@@ -194,11 +252,18 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 					// release the lock when goroutine exits
 					defer atomic.StoreUint32(&subLock, 0)
 
-					logger.Infof("started subscribing to events for triggers %s with client %s", fmt.Sprintf("[%s]", strings.Join(triggerNames, " ")), clientID)
+					logger.Infof("started subscribing to events for trigger %s with client %s", trigger.Template.Name, clientID)
 
-					err = ebDriver.SubscribeEventSources(cctx, conn, group, closeSubCh, depExpression, deps, filterFunc, actionFunc)
+					err = ebDriver.SubscribeEventSources(ctx, conn, group, closeSubCh, resetConditionsCh, depExpression, deps, filterFunc, actionFunc)
 					if err != nil {
 						logger.Errorw("failed to subscribe to eventbus", zap.Any("clientID", clientID), zap.Error(err))
+						sensorCtx.cfAPI.ReportError(
+							errors.Wrapf(err, "failed to subscribe to eventbus, clientID: %v", clientID),
+							codefresh.ErrorContext{
+								ObjectMeta: sensor.ObjectMeta,
+								TypeMeta:   sensor.TypeMeta,
+							},
+						)
 						return
 					}
 				}()
@@ -206,12 +271,41 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 
 			subscribeOnce(&subLock, subscribeFunc)
 
+			if len(trigger.Template.ConditionsReset) > 0 {
+				for _, c := range trigger.Template.ConditionsReset {
+					if c.ByTime == nil {
+						continue
+					}
+					opts := []cronlib.Option{
+						cronlib.WithParser(cronlib.NewParser(cronlib.Minute | cronlib.Hour | cronlib.Dom | cronlib.Month | cronlib.Dow)),
+						cronlib.WithChain(cronlib.Recover(cronlib.DefaultLogger)),
+					}
+					if c.ByTime.Timezone != "" {
+						location, err := time.LoadLocation(c.ByTime.Timezone)
+						if err != nil {
+							logger.Errorw("failed to load timezone", zap.Error(err))
+							continue
+						}
+						opts = append(opts, cronlib.WithLocation(location))
+					}
+					cr := cronlib.New(opts...)
+					_, err = cr.AddFunc(c.ByTime.Cron, func() {
+						resetConditionsCh <- struct{}{}
+					})
+					if err != nil {
+						logger.Errorw("failed to add cron schedule", zap.Error(err))
+						continue
+					}
+					cr.Start()
+				}
+			}
+
 			logger.Infof("starting eventbus connection daemon for client %s...", clientID)
 			ticker := time.NewTicker(5 * time.Second)
 			defer ticker.Stop()
 			for {
 				select {
-				case <-cctx.Done():
+				case <-ctx.Done():
 					logger.Infof("exiting eventbus connection daemon for client %s...", clientID)
 					wg1.Wait()
 					return
@@ -219,8 +313,8 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 					if conn == nil || conn.IsClosed() {
 						logger.Info("NATS connection lost, reconnecting...")
 						// Regenerate the client ID to avoid the issue that NAT server still thinks the client is alive.
-						_, clientID := sensorCtx.getGroupAndClientID(depExpression)
-						ebDriver, err := eventbus.GetDriver(cctx, *sensorCtx.eventBusConfig, sensorCtx.eventBusSubject, clientID)
+						_, clientID := sensorCtx.getGroupAndClientID(trigger.Template.Name, depExpression)
+						ebDriver, err := eventbus.GetDriver(logging.WithLogger(ctx, logger.With(logging.LabelTriggerName, trigger.Template.Name)), *sensorCtx.eventBusConfig, sensorCtx.eventBusSubject, clientID)
 						if err != nil {
 							logger.Errorw("failed to get eventbus driver during reconnection", zap.Error(err))
 							continue
@@ -245,7 +339,7 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 					}
 				}
 			}
-		}(k, v)
+		}(t)
 	}
 	logger.Info("Sensor started.")
 	<-ctx.Done()
@@ -255,8 +349,7 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 	return nil
 }
 
-func (sensorCtx *SensorContext) triggerActions(ctx context.Context, sensor *v1alpha1.Sensor, events map[string]cloudevents.Event, triggers []v1alpha1.Trigger) error {
-	log := logging.FromContext(ctx)
+func (sensorCtx *SensorContext) triggerActions(ctx context.Context, sensor *v1alpha1.Sensor, events map[string]cloudevents.Event, trigger v1alpha1.Trigger) error {
 	eventsMapping := make(map[string]*v1alpha1.Event)
 	depNames := make([]string, 0, len(events))
 	eventIDs := make([]string, 0, len(events))
@@ -265,25 +358,38 @@ func (sensorCtx *SensorContext) triggerActions(ctx context.Context, sensor *v1al
 		depNames = append(depNames, k)
 		eventIDs = append(eventIDs, v.ID())
 	}
-	for _, trigger := range triggers {
-		if err := sensorCtx.triggerOne(ctx, sensor, trigger, eventsMapping, depNames, eventIDs, log); err != nil {
-			// Log the error, and let it continue
-			log.Errorw("failed to execute a trigger", zap.Error(err), zap.String(logging.LabelTriggerName, trigger.Template.Name),
-				zap.Any("triggeredBy", depNames), zap.Any("triggeredByEvents", eventIDs))
-			sensorCtx.metrics.ActionFailed(sensor.Name, trigger.Template.Name)
-		} else {
-			sensorCtx.metrics.ActionTriggered(sensor.Name, trigger.Template.Name)
-		}
-	}
+	go sensorCtx.triggerWithRateLimit(ctx, sensor, trigger, eventsMapping, depNames, eventIDs)
 	return nil
+}
+
+func (sensorCtx *SensorContext) triggerWithRateLimit(ctx context.Context, sensor *v1alpha1.Sensor, trigger v1alpha1.Trigger, eventsMapping map[string]*v1alpha1.Event, depNames, eventIDs []string) {
+	if rl, ok := rateLimiters[trigger.Template.Name]; ok {
+		rl.Take()
+	}
+
+	log := logging.FromContext(ctx)
+	if err := sensorCtx.triggerOne(ctx, sensor, trigger, eventsMapping, depNames, eventIDs, log); err != nil {
+		// Log the error, and let it continue
+		log.Errorw("failed to execute a trigger", zap.Error(err), zap.String(logging.LabelTriggerName, trigger.Template.Name),
+			zap.Any("triggeredBy", depNames), zap.Any("triggeredByEvents", eventIDs))
+		sensorCtx.metrics.ActionFailed(sensor.Name, trigger.Template.Name)
+		sensorCtx.cfAPI.ReportError(
+			errors.Wrapf(err, "failed to execute a trigger { %s: %s, %s: %+q, %s: %+q }",
+				logging.LabelTriggerName, trigger.Template.Name, "triggeredBy", depNames, "triggeredByEvents", eventIDs),
+			codefresh.ErrorContext{
+				ObjectMeta: sensor.ObjectMeta,
+				TypeMeta:   sensor.TypeMeta,
+			},
+		)
+	} else {
+		sensorCtx.metrics.ActionTriggered(sensor.Name, trigger.Template.Name)
+	}
 }
 
 func (sensorCtx *SensorContext) triggerOne(ctx context.Context, sensor *v1alpha1.Sensor, trigger v1alpha1.Trigger, eventsMapping map[string]*v1alpha1.Event, depNames, eventIDs []string, log *zap.SugaredLogger) error {
 	defer func(start time.Time) {
 		sensorCtx.metrics.ActionDuration(sensor.Name, trigger.Template.Name, float64(time.Since(start)/time.Millisecond))
 	}(time.Now())
-
-	defer sensorCtx.metrics.ActionDuration(sensor.Name, trigger.Template.Name, float64(time.Since(time.Now())/time.Millisecond))
 
 	if err := sensortriggers.ApplyTemplateParameters(eventsMapping, &trigger); err != nil {
 		log.Errorf("failed to apply template parameters, %v", err)
@@ -378,34 +484,7 @@ func (sensorCtx *SensorContext) getDependencyExpression(ctx context.Context, tri
 			key := strings.ReplaceAll(dep.Name, "-", "_")
 			depGroupMapping[key] = dep.Name
 		}
-		for _, depGroup := range sensor.Spec.DependencyGroups {
-			key := strings.ReplaceAll(depGroup.Name, "-", "_")
-			depGroupMapping[key] = fmt.Sprintf("(%s)", strings.Join(depGroup.Dependencies, "&&"))
-		}
 		depExpression, err = translate(conditions, depGroupMapping)
-		if err != nil {
-			return "", err
-		}
-	case len(sensor.Spec.DependencyGroups) > 0 && sensor.Spec.DeprecatedCircuit != "" && trigger.Template.DeprecatedSwitch != nil:
-		// DEPRECATED.
-		logger.Warn("Circuit and Switch are deprecated, please use \"conditions\".")
-		temp := ""
-		sw := trigger.Template.DeprecatedSwitch
-		switch {
-		case len(sw.All) > 0:
-			temp = strings.Join(sw.All, "&&")
-		case len(sw.Any) > 0:
-			temp = strings.Join(sw.Any, "||")
-		default:
-			return "", errors.New("invalid trigger switch")
-		}
-		groupDepExpr := fmt.Sprintf("(%s) && (%s)", sensor.Spec.DeprecatedCircuit, temp)
-		depGroupMapping := make(map[string]string)
-		for _, depGroup := range sensor.Spec.DependencyGroups {
-			key := strings.ReplaceAll(depGroup.Name, "-", "_")
-			depGroupMapping[key] = fmt.Sprintf("(%s)", strings.Join(depGroup.Dependencies, "&&"))
-		}
-		depExpression, err = translate(groupDepExpr, depGroupMapping)
 		if err != nil {
 			return "", err
 		}
@@ -416,15 +495,8 @@ func (sensorCtx *SensorContext) getDependencyExpression(ctx context.Context, tri
 		}
 		depExpression = strings.Join(deps, "&&")
 	}
-	logger.Infof("Dependency expression for trigger %s before simplification: %s", trigger.Template.Name, depExpression)
-	boolSimplifier, err := common.NewBoolExpression(depExpression)
-	if err != nil {
-		logger.Errorw("Invalid dependency expression", zap.Error(err))
-		return "", err
-	}
-	result := boolSimplifier.GetExpression()
-	logger.Infof("Dependency expression for trigger %s after simplification: %s", trigger.Template.Name, result)
-	return result, nil
+	logger.Infof("Dependency expression for trigger %s: %s", trigger.Template.Name, depExpression)
+	return depExpression, nil
 }
 
 func convertEvent(event cloudevents.Event) *v1alpha1.Event {

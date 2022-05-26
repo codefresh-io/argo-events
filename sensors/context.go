@@ -23,12 +23,14 @@ import (
 	eventhubs "github.com/Azure/azure-event-hubs-go/v3"
 	"github.com/Shopify/sarama"
 	"github.com/apache/openwhisk-client-go/whisk"
+	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/aws/aws-sdk-go/service/lambda"
 	natslib "github.com/nats-io/go-nats"
 	"google.golang.org/grpc"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/argoproj/argo-events/codefresh"
 	sensormetrics "github.com/argoproj/argo-events/metrics"
 	eventbusv1alpha1 "github.com/argoproj/argo-events/pkg/apis/eventbus/v1alpha1"
 	"github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
@@ -56,6 +58,8 @@ type SensorContext struct {
 	slackHTTPClient *http.Client
 	// kafkaProducers holds references to the active kafka producers
 	kafkaProducers map[string]sarama.AsyncProducer
+	// pulsarProducers holds references to the active pulsar producers
+	pulsarProducers map[string]pulsar.Producer
 	// natsConnections holds the references to the active nats connections.
 	natsConnections map[string]*natslib.Conn
 	// awsLambdaClients holds the references to active AWS Lambda clients.
@@ -65,10 +69,12 @@ type SensorContext struct {
 	// azureEventHubsClients holds the references to active Azure Event Hub clients.
 	azureEventHubsClients map[string]*eventhubs.Hub
 	metrics               *sensormetrics.Metrics
+
+	cfAPI *codefresh.API
 }
 
 // NewSensorContext returns a new sensor execution context.
-func NewSensorContext(kubeClient kubernetes.Interface, dynamicClient dynamic.Interface, sensor *v1alpha1.Sensor, eventBusConfig *eventbusv1alpha1.BusConfig, eventBusSubject, hostname string, metrics *sensormetrics.Metrics) *SensorContext {
+func NewSensorContext(kubeClient kubernetes.Interface, dynamicClient dynamic.Interface, sensor *v1alpha1.Sensor, eventBusConfig *eventbusv1alpha1.BusConfig, eventBusSubject, hostname string, metrics *sensormetrics.Metrics, cfAPI *codefresh.API) *SensorContext {
 	return &SensorContext{
 		kubeClient:           kubeClient,
 		dynamicClient:        dynamicClient,
@@ -82,10 +88,12 @@ func NewSensorContext(kubeClient kubernetes.Interface, dynamicClient dynamic.Int
 			Timeout: time.Minute * 5,
 		},
 		kafkaProducers:        make(map[string]sarama.AsyncProducer),
+		pulsarProducers:       make(map[string]pulsar.Producer),
 		natsConnections:       make(map[string]*natslib.Conn),
 		awsLambdaClients:      make(map[string]*lambda.Lambda),
 		openwhiskClients:      make(map[string]*whisk.Client),
 		azureEventHubsClients: make(map[string]*eventhubs.Hub),
 		metrics:               metrics,
+		cfAPI:                 cfAPI,
 	}
 }

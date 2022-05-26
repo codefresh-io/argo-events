@@ -16,10 +16,12 @@ package argo_workflow
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -110,7 +112,7 @@ func (t *ArgoWorkflowTrigger) Execute(ctx context.Context, events map[string]*v1
 			return nil, errors.Errorf("failed to execute the workflow %v operation, no name is given", op)
 		}
 		if obj.GetGenerateName() == "" {
-			return nil, errors.New("failed to trigger the workflow, neither name nor generatedName is given")
+			return nil, errors.New("failed to trigger the workflow, neither name nor generateName is given")
 		}
 	}
 
@@ -118,7 +120,7 @@ func (t *ArgoWorkflowTrigger) Execute(ctx context.Context, events map[string]*v1
 	if op == v1alpha1.Submit {
 		submittedWFLabels["events.argoproj.io/trigger"] = trigger.Template.Name
 		submittedWFLabels["events.argoproj.io/action-timestamp"] = strconv.Itoa(int(time.Now().UnixNano() / int64(time.Millisecond)))
-		common.ApplySensorUniquenessLabels(submittedWFLabels, t.Sensor)
+		common.ApplySensorLabels(submittedWFLabels, t.Sensor)
 		err := common.ApplyEventLabels(submittedWFLabels, events)
 		if err != nil {
 			t.Logger.Info("failed to apply event labels, skipping...")
@@ -173,10 +175,11 @@ func (t *ArgoWorkflowTrigger) Execute(ctx context.Context, events map[string]*v1
 		return nil, errors.Errorf("unknown operation type %s", string(op))
 	}
 
+	var errBuff strings.Builder
+	cmd.Stderr = io.MultiWriter(os.Stderr, &errBuff)
 	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return nil, errors.Wrapf(err, "failed to execute %s command for workflow %s", string(op), name)
+		return nil, errors.Wrapf(err, "failed to execute %s command for workflow %s: %s", string(op), name, errBuff.String())
 	}
 
 	t.namespableDynamicClient = t.DynamicClient.Resource(schema.GroupVersionResource{
