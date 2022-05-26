@@ -5,6 +5,31 @@ resources:
   - ../../manifests/cluster-install
   - ../../manifests/extensions/validating-webhook
 
+patches:
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Deployment
+      name: controller-manager
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Deployment
+      name: events-webhook
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: IMAGE_PULL_POLICY
+          value: IfNotPresent
+    target:
+      kind: Deployment
+      name: controller-manager
+
 namespace: argo-events
 
 commonLabels:
