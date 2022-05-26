@@ -97,6 +97,7 @@ jobs:
         uses: actions/checkout@v2
       - name: Replace test directory by Argo code
         run: |
+          ls
           rm -rf test
           cp -r argo test
       - name: Restore go build cache
