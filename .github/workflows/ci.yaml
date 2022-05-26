@@ -88,6 +88,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - name: Checkout code of Argo
+        uses: actions/checkout@v2
+        with:
+          repository: argoproj/argo-events
+          path: argo
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Restore go build cache
