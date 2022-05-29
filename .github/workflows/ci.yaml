@@ -4,7 +4,6 @@ on:
     branches:
       - "master"
       - "release-*"
-      - "CR-*"
   pull_request:
     branches:
       - "master"
@@ -95,6 +94,7 @@ jobs:
         with:
           repository: argoproj/argo-events
           path: argo
+          ref: $GITHUB_REF_NAME
       - name: Replace test directory by Argo code
         run: |
           cp -r argo/test test
@@ -103,6 +103,7 @@ jobs:
         with:
           path: ~/.cache/go-build
           key: ${{ runner.os }}-go-build-v2-${{ hashFiles('**/go.mod') }}
+
       - name: Setup Golang
         uses: actions/setup-go@v1
         with:
