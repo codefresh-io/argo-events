@@ -96,7 +96,7 @@ jobs:
         with:
           repository: argoproj/argo-events
           path: argo
-          ref: ${BRANCH_NAME}
+          ref: ${{ env.BRANCH_NAME }}
       - name: Replace test directory by Argo code
         run: |
           cp -r argo/test test
