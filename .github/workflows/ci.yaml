@@ -92,7 +92,7 @@ jobs:
       - name: Checkout code of Argo
         uses: actions/checkout@v3
         with:
-          repository: argoproj/argo-events
+          repository: argoproj/${{ github.event.repository.name }}
           path: argo
           ref: ${{ github.base_ref }}
       - name: Replace test directory by Argo code
