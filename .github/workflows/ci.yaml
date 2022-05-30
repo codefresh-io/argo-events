@@ -90,13 +90,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
       - name: Checkout code of Argo
-        env:
-          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
         uses: actions/checkout@v3
         with:
           repository: argoproj/argo-events
           path: argo
-          ref: ${{ env.BRANCH_NAME }}
+          ref: ${{ GITHUB_BASE_REF }}
       - name: Replace test directory by Argo code
         run: |
           cp -r argo/test test
