@@ -89,6 +89,9 @@ jobs:
     steps:
       - name: Checkout code and the E2E code of Argo
         uses: ./.github/workflows/checkout-argo-e2e.yml
+        with:
+          project: ${{ github.event.repository.name }}
+          branch: ${{ github.base_ref }}
       - name: Restore go build cache
         uses: actions/cache@v1
         with:

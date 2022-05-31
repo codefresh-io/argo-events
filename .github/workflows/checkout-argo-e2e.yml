@@ -2,7 +2,13 @@ name: Checkout the code of project and the code of E2E from Argo repository
 
 on:
   workflow_call:
-
+    inputs:
+      project:
+        required: true
+        type: string
+      branch:
+        required: true
+        type: string
 
 jobs:
   checkout:
@@ -15,9 +21,9 @@ jobs:
       - name: Checkout code of Argo
         uses: actions/checkout@v3
         with:
-          repository: argoproj/${{ github.event.repository.name }}
+          repository: argoproj/${{ inputs.project }}
           path: argo
-          ref: ${{ github.base_ref }}
+          ref: ${{ inputs.branch }}
       - name: Replace test directory by Argo code
         run: |
           cp -r argo/test test
