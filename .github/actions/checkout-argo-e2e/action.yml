@@ -1,11 +1,13 @@
-name: 'Checkout the code of project and the code of E2E from Argo repository'
+name: "Checkout the code of project and the code of E2E from Argo repository"
+description: "Checkout the code of the project and the replaces the directory of E2E by the directory from the Argo repository"
 inputs:
   project:
+    description: 'Project name in the Argo repository'
     required: true
-    type: string
+    default: 'argo-events'
   branch:
+    description: 'Branch name'
     required: true
-    type: string
 
 runs:
   using: "composite"
@@ -19,5 +21,5 @@ runs:
         path: argo
         ref: ${{ inputs.branch }}
     - name: Replace test directory by Argo code
-      run: |
-        cp -r argo/test test
+      run: cp -r argo/test test
+      shell: bash
