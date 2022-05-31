@@ -1,29 +1,23 @@
-name: Checkout the code of project and the code of E2E from Argo repository
+name: 'Checkout the code of project and the code of E2E from Argo repository'
+inputs:
+  project:
+    required: true
+    type: string
+  branch:
+    required: true
+    type: string
 
-on:
-  workflow_call:
-    inputs:
-      project:
-        required: true
-        type: string
-      branch:
-        required: true
-        type: string
-
-jobs:
-  checkout:
-    name: Checkout code and the E2E code from Argo
-    runs-on: ubuntu-latest
-    timeout-minutes: 1
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-      - name: Checkout code of Argo
-        uses: actions/checkout@v3
-        with:
-          repository: argoproj/${{ inputs.project }}
-          path: argo
-          ref: ${{ inputs.branch }}
-      - name: Replace test directory by Argo code
-        run: |
-          cp -r argo/test test
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    - name: Checkout code of Argo
+      uses: actions/checkout@v3
+      with:
+        repository: argoproj/${{ inputs.project }}
+        path: argo
+        ref: ${{ inputs.branch }}
+    - name: Replace test directory by Argo code
+      run: |
+        cp -r argo/test test
