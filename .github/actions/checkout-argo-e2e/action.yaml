@@ -12,8 +12,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
     - name: Checkout code of Argo
       uses: actions/checkout@v3
       with:
