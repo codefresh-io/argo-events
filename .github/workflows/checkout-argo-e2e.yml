@@ -1,0 +1,23 @@
+name: Checkout the code of project and the code of E2E from Argo repository
+
+on:
+  workflow_call:
+
+
+jobs:
+  checkout:
+    name: Checkout code and the E2E code from Argo
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Checkout code of Argo
+        uses: actions/checkout@v3
+        with:
+          repository: argoproj/${{ github.event.repository.name }}
+          path: argo
+          ref: ${{ github.base_ref }}
+      - name: Replace test directory by Argo code
+        run: |
+          cp -r argo/test test
