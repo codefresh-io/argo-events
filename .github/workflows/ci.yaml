@@ -88,7 +88,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+      - name: Checkout code and the E2E code of Argo
+        uses: ./.github/actions/checkout-argo-e2e
       - name: Restore go build cache
         uses: actions/cache@v1
         with:
@@ -118,7 +120,7 @@ jobs:
       - name: Run tests
         env:
           GOPATH: /home/runner/go
-        run: KUBECONFIG=~/.kube/argo-events-e2e-config make test-functional | tee /tmp/e2e.log
+        run: KUBECONFIG=~/.kube/argo-events-e2e-config make test-functional-argo | tee /tmp/e2e.log
       - name: Upload e2e results
         uses: actions/upload-artifact@v2
         with:
