@@ -14,7 +14,7 @@ GIT_TREE_STATE=$(shell if [ -z "`git status --porcelain`" ]; then echo "clean" ;
 EXECUTABLES = curl docker gzip go
 
 CF_E2E_PATH=test/codefresh/e2e
-CF_ARGO_E2E_PATH=test/argo/e2e
+CF_ARGO_E2E_PATH=test/e2e
 
 #  docker image publishing options
 DOCKER_PUSH?=false
