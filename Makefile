@@ -13,9 +13,6 @@ GIT_TAG=$(shell if [ -z "`git status --porcelain`" ]; then git describe --exact-
 GIT_TREE_STATE=$(shell if [ -z "`git status --porcelain`" ]; then echo "clean" ; else echo "dirty"; fi)
 EXECUTABLES = curl docker gzip go
 
-CF_E2E_PATH=test/codefresh/e2e
-CF_ARGO_E2E_PATH=test/argo/e2e
-
 #  docker image publishing options
 DOCKER_PUSH?=false
 IMAGE_NAMESPACE?=quay.io/argoproj
@@ -82,16 +79,13 @@ set-qemu:
 	docker run --rm --privileged tonistiigi/binfmt:latest --install amd64,arm64
 
 test:
-	go test $(shell go list ./... | grep -v /vendor/) -race -short -v
-
-test-functional-argo:
-	go test -v -timeout 10m -count 1 --tags functional -p 1 ./$(CF_ARGO_E2E_PATH)
+	go test $(shell go list ./... | grep -v /vendor/ | grep -v /test/e2e/) -race -short -v
 
 test-functional:
-	go test -v -timeout 10m -count 1 --tags functional -p 1 ./$(CF_E2E_PATH)
+	go test -v -timeout 10m -count 1 --tags functional -p 1 ./test/e2e
 
 coverage:
-	go test -covermode=count -coverprofile=profile.cov $(shell go list ./... | grep -v /vendor/)
+	go test -covermode=count -coverprofile=profile.cov $(shell go list ./... | grep -v /vendor/ | grep -v /test/e2e/)
 	go tool cover -func=profile.cov
 
 clean:
