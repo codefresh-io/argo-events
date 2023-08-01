@@ -26,6 +26,7 @@ import (
 
 	"github.com/Knetic/govaluate"
 	"github.com/antonmedv/expr"
+	"github.com/argoproj/argo-events/codefresh"
 	"github.com/argoproj/argo-events/common"
 	"github.com/argoproj/argo-events/common/leaderelection"
 	"github.com/argoproj/argo-events/common/logging"
@@ -123,6 +124,13 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 			depExpression, err := sensorCtx.getDependencyExpression(ctx, trigger)
 			if err != nil {
 				triggerLogger.Errorw("failed to get dependency expression", zap.Error(err))
+				sensorCtx.cfClient.ReportError(
+					errors.Wrap(err, "failed to get dependency expression"),
+					codefresh.ErrorContext{
+						ObjectMeta: sensor.ObjectMeta,
+						TypeMeta:   sensor.TypeMeta,
+					},
+				)
 				return
 			}
 			// Calculate dependencies of each of the triggers.
@@ -130,6 +138,13 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 			expr, err := govaluate.NewEvaluableExpression(de)
 			if err != nil {
 				triggerLogger.Errorw("failed to get new evaluable expression", zap.Error(err))
+				sensorCtx.cfClient.ReportError(
+					errors.Wrap(err, "failed to get new evaluable expression"),
+					codefresh.ErrorContext{
+						ObjectMeta: sensor.ObjectMeta,
+						TypeMeta:   sensor.TypeMeta,
+					},
+				)
 				return
 			}
 			depNames := unique(expr.Vars())
@@ -138,6 +153,13 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 				dep, ok := depMapping[depName]
 				if !ok {
 					triggerLogger.Errorf("Dependency expression and dependency list do not match, %s is not found", depName)
+					sensorCtx.cfClient.ReportError(
+						errors.Wrapf(err, "Dependency expression and dependency list do not match, %s is not found", depName),
+						codefresh.ErrorContext{
+							ObjectMeta: sensor.ObjectMeta,
+							TypeMeta:   sensor.TypeMeta,
+						},
+					)
 					return
 				}
 				d := eventbuscommon.Dependency{
@@ -156,6 +178,14 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 				return err
 			})
 			if err != nil {
+				// report before fatal exit
+				sensorCtx.cfClient.ReportError(
+					errors.Wrap(err, "failed to connect to event bus"),
+					codefresh.ErrorContext{
+						ObjectMeta: sensor.ObjectMeta,
+						TypeMeta:   sensor.TypeMeta,
+					},
+				)
 				triggerLogger.Fatalw("failed to connect to event bus", zap.Error(err))
 				return
 			}
@@ -191,10 +221,15 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 						triggerLogger.Warnf("Event [%s] passed but with filtering error: %s",
 							eventToString(argoEvent), err.Error())
 					}
-				} else {
-					if !result {
-						triggerLogger.Warnf("Event [%s] discarded due to filtering", eventToString(argoEvent))
-					}
+					sensorCtx.cfClient.ReportError(
+						errors.Wrap(err, "failed to apply filters"),
+						codefresh.ErrorContext{
+							ObjectMeta: sensor.ObjectMeta,
+							TypeMeta:   sensor.TypeMeta,
+						},
+					)
+				} else if !result {
+					triggerLogger.Warnf("Event [%s] discarded due to filtering", eventToString(argoEvent))
 				}
 				return result
 			}
@@ -269,6 +304,13 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 					err = conn.Subscribe(ctx, closeSubCh, resetConditionsCh, lastResetTime, transformFunc, filterFunc, actionFunc, subject)
 					if err != nil {
 						triggerLogger.Errorw("failed to subscribe to eventbus", zap.Any("connection", conn), zap.Error(err))
+						sensorCtx.cfClient.ReportError(
+							errors.Wrapf(err, "failed to subscribe to eventbus, connection: %v", conn),
+							codefresh.ErrorContext{
+								ObjectMeta: sensor.ObjectMeta,
+								TypeMeta:   sensor.TypeMeta,
+							},
+						)
 						return
 					}
 					triggerLogger.Debugf("exiting subscribe goroutine, conn=%+v", conn)
@@ -345,6 +387,14 @@ func (sensorCtx *SensorContext) triggerWithRateLimit(ctx context.Context, sensor
 		log.Errorw("Failed to execute a trigger", zap.Error(err), zap.String(logging.LabelTriggerName, trigger.Template.Name),
 			zap.Any("triggeredBy", depNames), zap.Any("triggeredByEvents", eventIDs))
 		sensorCtx.metrics.ActionFailed(sensor.Name, trigger.Template.Name)
+		sensorCtx.cfClient.ReportError(
+			errors.Wrapf(err, "failed to execute a trigger { %s: %s, %s: %+q, %s: %+q }",
+				logging.LabelTriggerName, trigger.Template.Name, "triggeredBy", depNames, "triggeredByEvents", eventIDs),
+			codefresh.ErrorContext{
+				ObjectMeta: sensor.ObjectMeta,
+				TypeMeta:   sensor.TypeMeta,
+			},
+		)
 	} else {
 		sensorCtx.metrics.ActionTriggered(sensor.Name, trigger.Template.Name)
 	}

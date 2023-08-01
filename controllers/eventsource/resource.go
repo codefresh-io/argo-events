@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/imdario/mergo"
 	"go.uber.org/zap"
@@ -17,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/argoproj/argo-events/codefresh"
 	"github.com/argoproj/argo-events/common"
 	controllerscommon "github.com/argoproj/argo-events/controllers/common"
 	eventbusv1alpha1 "github.com/argoproj/argo-events/pkg/apis/eventbus/v1alpha1"
@@ -167,9 +169,14 @@ func buildDeployment(args *AdaptorArgs, eventBus *eventbusv1alpha1.EventBus) (*a
 		return nil, err
 	}
 	eventSourceCopy := &v1alpha1.EventSource{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       args.EventSource.Kind,
+			APIVersion: args.EventSource.APIVersion,
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: args.EventSource.Namespace,
 			Name:      args.EventSource.Name,
+			Labels:    common.CopyStringMap(args.EventSource.Labels),
 		},
 		Spec: args.EventSource.Spec,
 	}
@@ -182,6 +189,10 @@ func buildDeployment(args *AdaptorArgs, eventBus *eventbusv1alpha1.EventBus) (*a
 		{
 			Name:  common.EnvVarEventSourceObject,
 			Value: encodedEventSourceSpec,
+		},
+		{
+			Name:  codefresh.EnvVarShouldReportToCF,
+			Value: os.Getenv(codefresh.EnvVarShouldReportToCF),
 		},
 		{
 			Name:  common.EnvVarEventBusSubject,
