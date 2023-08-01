@@ -11,7 +11,7 @@ resources:
   - controller-manager
 
 images:
-  - name: quay.io/argoproj/argo-events
+  - name: quay.io/codefresh/argo-events
     newName: quay.io/codefresh/argo-events
     newTag: v1.7.3-cap-CR-19875
 
