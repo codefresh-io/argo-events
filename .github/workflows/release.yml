@@ -104,7 +104,7 @@ jobs:
       - env:
           VERSION: ${{ steps.version.outputs.VERSION }}
         run:
-          bom generate --scan-images=false --image quay.io/${{ secrets.QUAYIO_ORG }}/argo-events:$VERSION -o dist/argo-events.spdx
+          bom generate --scan-images=false --image quay.io/${{ secrets.QUAYIO_ORG }}/argo-events:$VERSION -o /tmp/argo-events.spdx
       # pack the boms into one file to make it easy to download
       - run: tar -zcf sbom.tar.gz dist/*.spdx
       - uses: actions/upload-artifact@v3
@@ -116,7 +116,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ build-push-linux-multi, bom ]
     permissions:
-      contents: read
+      contents: write
       id-token: write # Needed to create an OIDC token for keyless signing
     steps:
       - name: Download binaries
@@ -127,7 +127,7 @@ jobs:
       - uses: actions/download-artifact@v3
         with:
           name: sbom.tar.gz
-          path: dist/
+          path: /tmp
 
       - name: Registry Login
         uses: docker/login-action@v2
@@ -157,7 +157,7 @@ jobs:
         run: |
           cosign sign -y quay.io/${{ secrets.QUAYIO_ORG }}/argo-events@$IMAGE_DIGEST
           cosign sign-blob -y ./dist/argo-events-checksums.txt > ./dist/argo-events-checksums.sig
-          cosign sign-blob -y ./dist/sbom.tar.gz > ./dist/sbom.tar.gz.sig
+          cosign sign-blob -y /tmp/sbom.tar.gz > /tmp/sbom.tar.gz.sig
 
       - name: Release binaries
         uses: softprops/action-gh-release@v1
@@ -168,7 +168,7 @@ jobs:
             dist/argo-events-checksums.txt
             dist/argo-events-checksums.sig
             manifests/*.yaml
-            dist/sbom.tar.gz
-            dist/sbom.tar.gz.sig
+            /tmp/sbom.tar.gz
+            /tmp/sbom.tar.gz.sig
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
