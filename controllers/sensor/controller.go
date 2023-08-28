@@ -18,7 +18,9 @@ package sensor
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -34,7 +36,6 @@ import (
 	"github.com/argoproj/argo-events/common/logging"
 	eventbusv1alpha1 "github.com/argoproj/argo-events/pkg/apis/eventbus/v1alpha1"
 	"github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -116,7 +117,7 @@ func (r *reconciler) reconcile(ctx context.Context, sensor *v1alpha1.Sensor) err
 		if apierrors.IsNotFound(err) {
 			sensor.Status.MarkDeployFailed("EventBusNotFound", "EventBus not found.")
 			log.Errorw("EventBus not found", "eventBusName", eventBusName, "error", err)
-			return errors.Errorf("eventbus %s not found", eventBusName)
+			return fmt.Errorf("eventbus %s not found", eventBusName)
 		}
 		sensor.Status.MarkDeployFailed("GetEventBusFailed", "Failed to get EventBus.")
 		log.Errorw("failed to get EventBus", "eventBusName", eventBusName, "error", err)

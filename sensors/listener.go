@@ -107,7 +107,7 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	err = common.Connect(&common.DefaultBackoff, func() error {
+	err = common.DoWithRetry(&common.DefaultBackoff, func() error {
 		return ebDriver.Initialize()
 	})
 	if err != nil {
@@ -172,7 +172,7 @@ func (sensorCtx *SensorContext) listenEvents(ctx context.Context) error {
 			}
 
 			var conn eventbuscommon.TriggerConnection
-			err = common.Connect(&common.DefaultBackoff, func() error {
+			err = common.DoWithRetry(&common.DefaultBackoff, func() error {
 				var err error
 				conn, err = ebDriver.Connect(trigger.Template.Name, depExpression, deps)
 				triggerLogger.Debugf("just created connection %v, %+v", &conn, conn)
@@ -385,7 +385,7 @@ func (sensorCtx *SensorContext) triggerWithRateLimit(ctx context.Context, sensor
 	log := logging.FromContext(ctx)
 	if err := sensorCtx.triggerOne(ctx, sensor, trigger, eventsMapping, depNames, eventIDs, log); err != nil {
 		// Log the error, and let it continue
-		log.Errorw("failed to execute a trigger", zap.Error(err), zap.String(logging.LabelTriggerName, trigger.Template.Name),
+		log.Errorw("Failed to execute a trigger", zap.Error(err), zap.String(logging.LabelTriggerName, trigger.Template.Name),
 			zap.Any("triggeredBy", depNames), zap.Any("triggeredByEvents", eventIDs))
 		sensorCtx.metrics.ActionFailed(sensor.Name, trigger.Template.Name)
 		sensorCtx.cfClient.ReportError(
@@ -416,7 +416,7 @@ func (sensorCtx *SensorContext) triggerOne(ctx context.Context, sensor *v1alpha1
 	logger.Debugw("resolving the trigger implementation")
 	triggerImpl := sensorCtx.GetTrigger(ctx, &trigger)
 	if triggerImpl == nil {
-		return errors.Errorf("invalid trigger %s, could not find an implementation", trigger.Template.Name)
+		return fmt.Errorf("invalid trigger %s, could not find an implementation", trigger.Template.Name)
 	}
 
 	logger = logger.With(logging.LabelTriggerType, triggerImpl.GetTriggerType())
@@ -426,7 +426,7 @@ func (sensorCtx *SensorContext) triggerOne(ctx context.Context, sensor *v1alpha1
 		return err
 	}
 	if obj == nil {
-		return errors.Errorf("invalid trigger %s, could not fetch the trigger resource", trigger.Template.Name)
+		return fmt.Errorf("invalid trigger %s, could not fetch the trigger resource", trigger.Template.Name)
 	}
 
 	logger.Debug("applying resource parameters if any")
@@ -441,12 +441,12 @@ func (sensorCtx *SensorContext) triggerOne(ctx context.Context, sensor *v1alpha1
 		retryStrategy = &apicommon.Backoff{Steps: 1}
 	}
 	var newObj interface{}
-	if err := common.Connect(retryStrategy, func() error {
+	if err := common.DoWithRetry(retryStrategy, func() error {
 		var e error
 		newObj, e = triggerImpl.Execute(ctx, eventsMapping, updatedObj)
 		return e
 	}); err != nil {
-		return errors.Wrap(err, "failed to execute trigger")
+		return fmt.Errorf("failed to execute trigger, %w", err)
 	}
 	logger.Debug("trigger resource successfully executed")
 
@@ -454,7 +454,7 @@ func (sensorCtx *SensorContext) triggerOne(ctx context.Context, sensor *v1alpha1
 	if err := triggerImpl.ApplyPolicy(ctx, newObj); err != nil {
 		return err
 	}
-	logger.Infow(fmt.Sprintf("successfully processed trigger '%s'", trigger.Template.Name),
+	logger.Infow(fmt.Sprintf("Successfully processed trigger '%s'", trigger.Template.Name),
 		zap.Any("triggeredBy", depNames), zap.Any("triggeredByEvents", eventIDs))
 	return nil
 }
