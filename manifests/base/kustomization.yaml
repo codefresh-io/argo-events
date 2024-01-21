@@ -27,4 +27,4 @@ patches:
             - name: controller-manager
               env:
                 - name: ARGO_EVENTS_IMAGE
-                  value: quay.io/argoproj/argo-events:v1.9.0
+                  value: quay.io/codefresh/argo-events:v1.9.0
