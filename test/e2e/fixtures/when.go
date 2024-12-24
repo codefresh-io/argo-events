@@ -35,7 +35,7 @@ func (w *When) CreateEventBus() *When {
 	if w.eventBus == nil {
 		w.t.Fatal("No event bus to create")
 	}
-	w.t.Log("Creating event bus", w.eventBus.Name)
+	w.t.Log("Creating event bus!", w.eventBus.Name)
 	ctx := context.Background()
 	eb, err := w.eventBusClient.Create(ctx, w.eventBus, metav1.CreateOptions{})
 	if err != nil {
