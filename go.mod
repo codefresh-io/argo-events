@@ -340,4 +340,4 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 )
 
-replace golang.org/x/crypto => golang.org/x/crypto v0.31.0 // cve ?
+replace golang.org/x/crypto => golang.org/x/crypto v0.31.0 // CVE-2024-45337
