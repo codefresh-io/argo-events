@@ -38,20 +38,6 @@ ensure_vendor() {
   go mod vendor
 }	
 
-ensure_pandoc() {
-  if [ "`command -v pandoc`" = "" ]; then
-    warning "Please install pandoc with - brew install pandoc"
-    exit 1
-  fi
-}
-
-ensure_protobuf() {
-  if [ "`command -v protoc`" = "" ]; then
-    warning "Please install protobuf with - brew install protobuf"
-    exit 1
-  fi
-}
-
 ensure_mockery() {
   if [ "`command -v mockery`" = "" ]; then
     warning "Please install mockery with - brew install vektra/tap/mockery"

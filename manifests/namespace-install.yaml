@@ -250,6 +250,10 @@ data:
           maxBytes: -1
           replicas: 3
           duplicates: 300s
+          # 0: Limits, 1: Interest, 2: WorkQueue
+          retention: 0
+          # 0: DiscardOld, 1: DiscardNew
+          discard: 0
         versions:
         - version: latest
           natsImage: nats:2.10.10
@@ -322,12 +326,12 @@ spec:
         - --namespaced
         env:
         - name: ARGO_EVENTS_IMAGE
-          value: quay.io/codefresh/argo-events:v1.9.2-cap-CR-26731
+          value: quay.io/codefresh/argo-events:v1.9.5-cap-CR-26969
         - name: NAMESPACE
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: quay.io/codefresh/argo-events:v1.9.2-cap-CR-26731
+        image: quay.io/codefresh/argo-events:v1.9.5-cap-CR-26969
         imagePullPolicy: Always
         livenessProbe:
           httpGet:

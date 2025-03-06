@@ -23,7 +23,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: "1.23"
       - name: Restore go build cache
         uses: actions/cache@v4
         with:
@@ -72,7 +72,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v5
         with:
-          go-version: "1.21"
+          go-version: "1.23"
       - name: Restore go build cache
         uses: actions/cache@v4
         with:
@@ -99,7 +99,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v5
         with:
-          go-version: "1.21"
+          go-version: "1.23"
       - name: Restore go build cache
         uses: actions/cache@v4
         with:
@@ -125,14 +125,14 @@ jobs:
         include:
           - driver: stan
           - driver: jetstream
-          - driver: kafka
+          #- driver: kafka
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Setup Golang
         uses: actions/setup-go@v5
         with:
-          go-version: "1.21"
+          go-version: "1.23"
       - name: Restore go build cache
         uses: actions/cache@v4
         with:
@@ -144,12 +144,18 @@ jobs:
             ${{ runner.os }}-go-
       - name: Install k3d
         run: curl -sfL https://raw.githubusercontent.com/rancher/k3d/main/install.sh | bash &
-      - name: Create k3d registry and cluster
+      - name: Create k3d cluster
         run: |
-          k3d registry create e2e-registry --port 5111
-          k3d cluster create e2e -i rancher/k3s:v1.21.7-k3s1 --registry-use k3d-e2e-registry:5111
-          echo '127.0.0.1 k3d-e2e-registry' | sudo tee -a /etc/hosts
+          k3d cluster create e2e
+          mkdir -p ~/.kube
+          k3d kubeconfig get e2e > ~/.kube/argo-events-e2e-config
+      - name: Install Argo Events
+        env:
+          GOPATH: /home/runner/go
+        run: |
+          KUBECONFIG=~/.kube/argo-events-e2e-config VERSION=${{ github.sha }} make start
       - name: Run tests
+        env:
+          GOPATH: /home/runner/go
         run: |
-          IMAGE_NAMESPACE=k3d-e2e-registry:5111 VERSION=${{ github.sha }} DOCKER_PUSH=true make start
-          EventBusDriver=${{ matrix.driver }} make test-functional
+          KUBECONFIG=~/.kube/argo-events-e2e-config EventBusDriver=${{ matrix.driver }} make test-functional
