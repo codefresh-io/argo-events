@@ -15,6 +15,10 @@ debug.test
 site/
 /go-diagrams/
 argo-events
+# ignore temp vi files
+*.swo
+*.swp
+
 # telepresence
 .env
 telepresence.log
