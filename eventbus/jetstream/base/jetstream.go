@@ -3,6 +3,7 @@ package base
 import (
 	"bytes"
 	"crypto/tls"
+	"errors"
 	"fmt"
 
 	"github.com/argoproj/argo-events/common"
@@ -40,7 +41,7 @@ func (stream *Jetstream) Init() error {
 	if err != nil {
 		errStr := fmt.Sprintf("error creating Management Connection for Jetstream stream %+v: %v", stream, err)
 		stream.Logger.Error(errStr)
-		return fmt.Errorf(errStr)
+		return errors.New(errStr)
 	}
 	err = stream.CreateStream(mgmtConnection)
 	if err != nil {
@@ -146,7 +147,7 @@ func (stream *Jetstream) CreateStream(conn *JetstreamConnection) error {
 		if err != nil {
 			errStr := fmt.Sprintf(`Failed to add Jetstream stream '%s'for connection %+v: err=%v`,
 				common.JetStreamStreamName, conn, err)
-			return fmt.Errorf(errStr)
+			return errors.New(errStr)
 		} else {
 			return nil
 		}

@@ -39,11 +39,11 @@ func (s *sensor) ValidateCreate(ctx context.Context) *admissionv1.AdmissionRespo
 	}
 	eventBus, err := s.eventBusClient.ArgoprojV1alpha1().EventBus(s.newSensor.Namespace).Get(ctx, eventBusName, metav1.GetOptions{})
 	if err != nil {
-		return DeniedResponse(fmt.Sprintf("failed to get EventBus eventBusName=%s; err=%v", eventBusName, err))
+		return DeniedResponse("%s", fmt.Sprintf("failed to get EventBus eventBusName=%s; err=%v", eventBusName, err))
 	}
 
 	if err := sensorcontroller.ValidateSensor(s.newSensor, eventBus); err != nil {
-		return DeniedResponse(err.Error())
+		return DeniedResponse("%s", err.Error())
 	}
 	return AllowedResponse()
 }
