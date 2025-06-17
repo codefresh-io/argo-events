@@ -31,7 +31,7 @@ func NewEventBusValidator(client kubernetes.Interface, ebClient eventbusclient.I
 
 func (eb *eventbus) ValidateCreate(ctx context.Context) *admissionv1.AdmissionResponse {
 	if err := eventbuscontroller.ValidateEventBus(eb.neweb); err != nil {
-		return DeniedResponse(err.Error())
+		return DeniedResponse("%s", err.Error())
 	}
 
 	return AllowedResponse()
@@ -42,7 +42,7 @@ func (eb *eventbus) ValidateUpdate(ctx context.Context) *admissionv1.AdmissionRe
 		return AllowedResponse()
 	}
 	if err := eventbuscontroller.ValidateEventBus(eb.neweb); err != nil {
-		return DeniedResponse(err.Error())
+		return DeniedResponse("%s", err.Error())
 	}
 	switch {
 	case eb.neweb.Spec.NATS != nil:

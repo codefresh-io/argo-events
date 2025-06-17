@@ -2,6 +2,7 @@ package sensor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -35,7 +36,7 @@ func NewSensorJetstream(url string, sensorSpec *v1alpha1.Sensor, streamConfig st
 	if sensorSpec == nil {
 		errStr := SensorNilError
 		logger.Errorf(errStr)
-		return nil, fmt.Errorf(errStr)
+		return nil, errors.New(errStr)
 	}
 
 	baseJetstream, err := eventbusjetstreambase.NewJetstream(url, streamConfig, auth, logger)
@@ -95,7 +96,7 @@ func (stream *SensorJetstream) setStateToSpec(sensorSpec *v1alpha1.Sensor) error
 	if sensorSpec == nil {
 		errStr := SensorNilError
 		log.Error(errStr)
-		return fmt.Errorf(errStr)
+		return errors.New(errStr)
 	}
 
 	log.Infof("Comparing previous Spec stored in k/v store for sensor %s to new Spec", sensorSpec.Name)
@@ -166,7 +167,7 @@ func (stream *SensorJetstream) saveSpec(sensorSpec *v1alpha1.Sensor, removedTrig
 		if err != nil {
 			errStr := fmt.Sprintf("error deleting key %s: %v", key, err)
 			stream.Logger.Error(errStr)
-			return fmt.Errorf(errStr)
+			return errors.New(errStr)
 		}
 		stream.Logger.Debugf("successfully removed Trigger expression at key %s", key)
 	}
@@ -178,7 +179,7 @@ func (stream *SensorJetstream) saveSpec(sensorSpec *v1alpha1.Sensor, removedTrig
 		if err != nil {
 			errStr := fmt.Sprintf("failed to hash dependency %+v", dep)
 			stream.Logger.Errorf(errStr)
-			err = fmt.Errorf(errStr)
+			err = errors.New(errStr)
 			return err
 		}
 		depMap[dep.Name] = hash
@@ -213,7 +214,7 @@ func (stream *SensorJetstream) getChangedTriggers(sensorSpec *v1alpha1.Sensor) (
 	if sensorSpec == nil {
 		errStr := SensorNilError
 		stream.Logger.Errorf(errStr)
-		err = fmt.Errorf(errStr)
+		err = errors.New(errStr)
 		return nil, nil, nil, err
 	}
 
@@ -249,7 +250,7 @@ func (stream *SensorJetstream) getChangedDeps(sensorSpec *v1alpha1.Sensor) (chan
 	if sensorSpec == nil {
 		errStr := SensorNilError
 		stream.Logger.Errorf(errStr)
-		err = fmt.Errorf(errStr)
+		err = errors.New(errStr)
 		return nil, nil, nil, err
 	}
 
@@ -272,7 +273,7 @@ func (stream *SensorJetstream) getChangedDeps(sensorSpec *v1alpha1.Sensor) (chan
 			if err != nil {
 				errStr := fmt.Sprintf("failed to hash dependency %+v", currDep)
 				stream.Logger.Errorf(errStr)
-				err = fmt.Errorf(errStr)
+				err = errors.New(errStr)
 				return nil, nil, nil, err
 			}
 			if hash == hashedDep {
@@ -294,7 +295,7 @@ func (stream *SensorJetstream) getDependencyDefinitions() (DependencyDefinitionV
 		}
 		errStr := fmt.Sprintf("error getting key %s: %v", DependencyDefsKey, err)
 		stream.Logger.Error(errStr)
-		return nil, fmt.Errorf(errStr)
+		return nil, errors.New(errStr)
 	}
 	stream.Logger.Debugf("Value of key %s: %s", DependencyDefsKey, string(depDefs.Value()))
 
@@ -303,7 +304,7 @@ func (stream *SensorJetstream) getDependencyDefinitions() (DependencyDefinitionV
 	if err != nil {
 		errStr := fmt.Sprintf("error unmarshalling value %s of key %s: %v", string(depDefs.Value()), DependencyDefsKey, err)
 		stream.Logger.Error(errStr)
-		return nil, fmt.Errorf(errStr)
+		return nil, errors.New(errStr)
 	}
 
 	return depDefMap, nil
@@ -314,13 +315,13 @@ func (stream *SensorJetstream) storeDependencyDefinitions(depDef DependencyDefin
 	if err != nil {
 		errStr := fmt.Sprintf("error marshalling %+v: %v", depDef, err)
 		stream.Logger.Error(errStr)
-		return fmt.Errorf(errStr)
+		return errors.New(errStr)
 	}
 	_, err = stream.keyValueStore.Put(DependencyDefsKey, bytes)
 	if err != nil {
 		errStr := fmt.Sprintf("error storing %s under key %s: %v", string(bytes), DependencyDefsKey, err)
 		stream.Logger.Error(errStr)
-		return fmt.Errorf(errStr)
+		return errors.New(errStr)
 	}
 	stream.Logger.Debugf("successfully stored dependency definition under key %s: %s", DependencyDefsKey, string(bytes))
 	return nil
@@ -334,7 +335,7 @@ func (stream *SensorJetstream) getTriggerList() (TriggerValue, error) {
 		}
 		errStr := fmt.Sprintf("error getting key %s: %v", TriggersKey, err)
 		stream.Logger.Error(errStr)
-		return nil, fmt.Errorf(errStr)
+		return nil, errors.New(errStr)
 	}
 	stream.Logger.Debugf("Value of key %s: %s", TriggersKey, string(triggerListJson.Value()))
 
@@ -343,7 +344,7 @@ func (stream *SensorJetstream) getTriggerList() (TriggerValue, error) {
 	if err != nil {
 		errStr := fmt.Sprintf("error unmarshalling value %s of key %s: %v", string(triggerListJson.Value()), TriggersKey, err)
 		stream.Logger.Error(errStr)
-		return nil, fmt.Errorf(errStr)
+		return nil, errors.New(errStr)
 	}
 
 	return triggerList, nil
@@ -354,13 +355,13 @@ func (stream *SensorJetstream) storeTriggerList(triggerList TriggerValue) error 
 	if err != nil {
 		errStr := fmt.Sprintf("error marshalling %+v: %v", triggerList, err)
 		stream.Logger.Error(errStr)
-		return fmt.Errorf(errStr)
+		return errors.New(errStr)
 	}
 	_, err = stream.keyValueStore.Put(TriggersKey, bytes)
 	if err != nil {
 		errStr := fmt.Sprintf("error storing %s under key %s: %v", string(bytes), TriggersKey, err)
 		stream.Logger.Error(errStr)
-		return fmt.Errorf(errStr)
+		return errors.New(errStr)
 	}
 	stream.Logger.Debugf("successfully stored trigger list under key %s: %s", TriggersKey, string(bytes))
 	return nil
@@ -375,7 +376,7 @@ func (stream *SensorJetstream) getTriggerExpression(triggerName string) (string,
 		}
 		errStr := fmt.Sprintf("error getting key %s: %v", key, err)
 		stream.Logger.Error(errStr)
-		return "", fmt.Errorf(errStr)
+		return "", errors.New(errStr)
 	}
 	stream.Logger.Debugf("Value of key %s: %s", key, string(expr.Value()))
 
@@ -388,7 +389,7 @@ func (stream *SensorJetstream) storeTriggerExpression(triggerName string, condit
 	if err != nil {
 		errStr := fmt.Sprintf("error storing %s under key %s: %v", conditionExpression, key, err)
 		stream.Logger.Error(errStr)
-		return fmt.Errorf(errStr)
+		return errors.New(errStr)
 	}
 	stream.Logger.Debugf("successfully stored trigger expression under key %s: %s", key, conditionExpression)
 	return nil

@@ -1,14 +1,16 @@
 run:
   timeout: 5m
-  skip-dirs:
+
+issues:
+  exclude-dirs:
     - pkg/client
     - vendor
     - "eventsources/common/naivewatcher"
-  skip-files:
+  exclude-files:
     - ".*generated.*"
 linters:
   enable:
-    - deadcode
+   # - deadcode # deprecated - replaced by unused
    # - depguard
     - dogsled
     - goconst
@@ -23,9 +25,9 @@ linters:
     - nakedret
     - rowserrcheck
     - staticcheck
-   # - structcheck
+   # - structcheck # deprecated - replaced by unused
     - typecheck
     - unconvert
     - unused
-    - varcheck
+   # - varcheck # deprecated - replaced by unused
     - whitespace

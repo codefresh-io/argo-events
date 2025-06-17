@@ -227,7 +227,7 @@ filterData:
 			}
 		}
 
-		if f.Value == nil || len(f.Value) == 0 {
+		if len(f.Value) == 0 {
 			errMsg := "no values specified"
 			if operator == v1alpha1.OrLogicalOperator {
 				errMessages = append(errMessages, errMsg)
